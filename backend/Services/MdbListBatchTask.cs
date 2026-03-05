@@ -16,7 +16,7 @@ namespace Moonfin.Server.Services;
 
 /// <summary>
 /// Scheduled task that batch-fetches MDBList ratings for all library items.
-/// Runs on startup and daily. Only fetches items not already cached.
+/// Pages through the library in chunks to avoid loading everything into memory.
 /// </summary>
 public class MdbListBatchTask : IScheduledTask
 {
@@ -25,8 +25,10 @@ public class MdbListBatchTask : IScheduledTask
     public string Description => "Batch-fetches MDBList ratings for all movies and shows in the library. Only fetches items not already cached.";
     public string Category => "Moonfin";
 
-    private const int BatchSize = 100;
-    private const int DelayBetweenBatchesMs = 2000;
+    private const int ApiBatchSize = 100;
+    private const int LibraryPageSize = 2000;
+    private const int DelayBetweenApiBatchesMs = 2000;
+    private const int FlushEveryNBatches = 20;
     private static readonly TimeSpan CacheMaxAge = TimeSpan.FromDays(7);
 
     private readonly ILibraryManager _libraryManager;
@@ -55,25 +57,39 @@ public class MdbListBatchTask : IScheduledTask
             return;
         }
 
-        _logger.LogInformation("MDBList batch sync starting...");
+        var totalLibraryCount = GetLibraryCount();
+        _logger.LogInformation("MDBList batch sync starting ({Total} library items)...", totalLibraryCount);
         progress.Report(0);
 
-        var itemsToFetch = GetLibraryItems();
-        _logger.LogInformation("Found {Total} library items with TMDb IDs", itemsToFetch.Count);
+        var freshKeys = _cacheService.GetFreshKeys(CacheMaxAge);
 
-        if (itemsToFetch.Count == 0)
+        var uncachedItems = new List<LibraryItemInfo>();
+        var totalScanned = 0;
+        var startIndex = 0;
+
+        while (true)
         {
-            progress.Report(100);
-            return;
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var page = GetLibraryItemsPage(startIndex, LibraryPageSize);
+            if (page.Count == 0) break;
+
+            foreach (var item in page)
+            {
+                if (!freshKeys.Contains(item.CacheKey))
+                {
+                    uncachedItems.Add(item);
+                }
+            }
+
+            totalScanned += page.Count;
+            startIndex += page.Count;
+
+            if (page.Count < LibraryPageSize) break;
         }
 
-        var freshKeys = _cacheService.GetFreshKeys(CacheMaxAge);
-        var uncachedItems = itemsToFetch
-            .Where(item => !freshKeys.Contains(item.CacheKey))
-            .ToList();
-
-        _logger.LogInformation("{Cached} items already cached, {Uncached} items need fetching",
-            itemsToFetch.Count - uncachedItems.Count, uncachedItems.Count);
+        _logger.LogInformation("Scanned {Scanned} items: {Cached} cached, {Uncached} need fetching",
+            totalScanned, totalScanned - uncachedItems.Count, uncachedItems.Count);
 
         if (uncachedItems.Count == 0)
         {
@@ -82,11 +98,12 @@ public class MdbListBatchTask : IScheduledTask
             return;
         }
 
-        // Group by type (the batch endpoint requires separate calls per type)
         var movieItems = uncachedItems.Where(i => i.Type == "movie").ToList();
         var showItems = uncachedItems.Where(i => i.Type == "show").ToList();
 
-        var totalItems = uncachedItems.Count;
+        uncachedItems = null!;
+
+        var totalItems = movieItems.Count + showItems.Count;
         var processedItems = 0;
 
         processedItems = await FetchBatchesAsync(movieItems, "movie", apiKey, processedItems, totalItems, progress, cancellationToken);
@@ -98,7 +115,22 @@ public class MdbListBatchTask : IScheduledTask
         progress.Report(100);
     }
 
-    private List<LibraryItemInfo> GetLibraryItems()
+    /// <summary>Gets the total number of movies + series in the library (cheap count-only query).</summary>
+    private int GetLibraryCount()
+    {
+        var query = new InternalItemsQuery
+        {
+            IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Series],
+            IsVirtualItem = false,
+            Recursive = true,
+            Limit = 0
+        };
+
+        return _libraryManager.GetCount(query);
+    }
+
+    /// <summary>Loads a single page of library items, extracting only the TMDB ID and type.</summary>
+    private List<LibraryItemInfo> GetLibraryItemsPage(int startIndex, int limit)
     {
         var items = new List<LibraryItemInfo>();
 
@@ -106,7 +138,9 @@ public class MdbListBatchTask : IScheduledTask
         {
             IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Series],
             IsVirtualItem = false,
-            Recursive = true
+            Recursive = true,
+            StartIndex = startIndex,
+            Limit = limit
         };
 
         var results = _libraryManager.GetItemsResult(query);
@@ -139,8 +173,10 @@ public class MdbListBatchTask : IScheduledTask
     {
         if (items.Count == 0) return processedSoFar;
 
-        var batches = items.Chunk(BatchSize).ToList();
+        var batches = items.Chunk(ApiBatchSize).ToList();
         _logger.LogInformation("Fetching {Count} {Type}s in {Batches} batch(es)", items.Count, type, batches.Count);
+
+        var batchesSinceFlush = 0;
 
         foreach (var batch in batches)
         {
@@ -163,11 +199,18 @@ public class MdbListBatchTask : IScheduledTask
             }
 
             processedSoFar += batch.Length;
+            batchesSinceFlush++;
             progress.Report((double)processedSoFar / totalItems * 100);
+
+            if (batchesSinceFlush >= FlushEveryNBatches)
+            {
+                await _cacheService.FlushAsync();
+                batchesSinceFlush = 0;
+            }
 
             if (processedSoFar < totalItems)
             {
-                await Task.Delay(DelayBetweenBatchesMs, cancellationToken);
+                await Task.Delay(DelayBetweenApiBatchesMs, cancellationToken);
             }
         }
 

@@ -10,6 +10,7 @@ namespace Moonfin.Server.Services;
 /// Persistent file-backed cache for MDBList ratings.
 /// Stores all ratings unfiltered, keyed by "movie:tmdbId" or "show:tmdbId".
 /// The batch task populates this cache; the controller reads from it.
+/// Uses stream-based JSON I/O to handle large caches without string allocation spikes.
 /// </summary>
 public class MdbListCacheService
 {
@@ -98,8 +99,8 @@ public class MdbListCacheService
         await _fileLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            var json = JsonSerializer.Serialize(cache, JsonOptions);
-            await File.WriteAllTextAsync(_cacheFilePath, json).ConfigureAwait(false);
+            await using var stream = File.Create(_cacheFilePath);
+            await JsonSerializer.SerializeAsync(stream, cache, JsonOptions).ConfigureAwait(false);
             _logger.LogDebug("MDBList cache flushed to disk ({Count} entries)", cache.Count);
         }
         catch (Exception ex)
@@ -125,8 +126,8 @@ public class MdbListCacheService
             {
                 try
                 {
-                    var json = File.ReadAllText(_cacheFilePath);
-                    var loaded = JsonSerializer.Deserialize<Dictionary<string, MdbListCacheEntry>>(json, JsonOptions);
+                    using var stream = File.OpenRead(_cacheFilePath);
+                    var loaded = JsonSerializer.Deserialize<Dictionary<string, MdbListCacheEntry>>(stream, JsonOptions);
                     _cache = loaded != null
                         ? new ConcurrentDictionary<string, MdbListCacheEntry>(loaded, StringComparer.OrdinalIgnoreCase)
                         : new ConcurrentDictionary<string, MdbListCacheEntry>(StringComparer.OrdinalIgnoreCase);
