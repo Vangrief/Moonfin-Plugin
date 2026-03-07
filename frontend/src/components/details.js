@@ -470,9 +470,26 @@ var Details = {
             '</div>'
         );
         
-        var audioTracks = (item.MediaStreams || []).filter(function(s) { return s.Type === 'Audio'; });
+        if (item.MediaSources && item.MediaSources.length > 1) {
+            this._selectedMediaSourceId = item.MediaSources[0].Id;
+            actionBtns.push(
+                '<div class="moonfin-btn-wrapper moonfin-focusable" data-action="version" tabindex="0">' +
+                    '<div class="moonfin-btn-circle">' +
+                        '<svg viewBox="0 -960 960 960" fill="currentColor"><path d="M320-280h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-560v-160H240v640h480v-480H520ZM240-800v160-160 640-640Z"/></svg>' +
+                    '</div>' +
+                    '<span class="moonfin-btn-label">' + (item.MediaSources[0].Name || 'Version') + '</span>' +
+                '</div>'
+            );
+        } else {
+            this._selectedMediaSourceId = (item.MediaSources && item.MediaSources[0]) ? item.MediaSources[0].Id : null;
+        }
+
+        var selectedMediaSource = this._getSelectedMediaSource(item);
+        var mediaStreams = this._getMediaStreams(item);
+
+        var audioTracks = mediaStreams.filter(function(s) { return s.Type === 'Audio'; });
         if (audioTracks.length > 1) {
-            var defaultAudio = item.MediaSources && item.MediaSources[0] ? item.MediaSources[0].DefaultAudioStreamIndex : null;
+            var defaultAudio = selectedMediaSource ? selectedMediaSource.DefaultAudioStreamIndex : null;
             var selectedAudioTrack = null;
             for (var ai = 0; ai < audioTracks.length; ai++) {
                 if (audioTracks[ai].Index === defaultAudio) { selectedAudioTrack = audioTracks[ai]; break; }
@@ -491,9 +508,9 @@ var Details = {
             this._selectedAudioIndex = null;
         }
 
-        var subtitleTracks = (item.MediaStreams || []).filter(function(s) { return s.Type === 'Subtitle'; });
+        var subtitleTracks = mediaStreams.filter(function(s) { return s.Type === 'Subtitle'; });
         if (subtitleTracks.length > 0) {
-            var defaultSub = item.MediaSources && item.MediaSources[0] ? item.MediaSources[0].DefaultSubtitleStreamIndex : -1;
+            var defaultSub = selectedMediaSource ? selectedMediaSource.DefaultSubtitleStreamIndex : -1;
             if (defaultSub == null) defaultSub = -1;
             var selectedSubTrack = null;
             for (var si = 0; si < subtitleTracks.length; si++) {
@@ -896,7 +913,7 @@ var Details = {
     },
 
     // Uses ApiClient.sendPlayCommand first, falls back to REST Sessions API
-    playItem: function(itemId, startPositionTicks, audioStreamIndex, subtitleStreamIndex) {
+    playItem: function(itemId, startPositionTicks, audioStreamIndex, subtitleStreamIndex, mediaSourceId) {
         var self = this;
         var api = API.getApiClient();
 
@@ -905,6 +922,7 @@ var Details = {
             PlayCommand: 'PlayNow',
             StartPositionTicks: startPositionTicks || 0
         };
+        if (mediaSourceId) playBody.MediaSourceId = mediaSourceId;
         if (audioStreamIndex != null) playBody.AudioStreamIndex = audioStreamIndex;
         if (subtitleStreamIndex != null && subtitleStreamIndex !== -1) {
             playBody.SubtitleStreamIndex = subtitleStreamIndex;
@@ -919,16 +937,16 @@ var Details = {
                 }
                 throw new Error('No session');
             }).catch(function() {
-                self._playViaSession(itemId, startPositionTicks, audioStreamIndex, subtitleStreamIndex);
+                self._playViaSession(itemId, startPositionTicks, audioStreamIndex, subtitleStreamIndex, mediaSourceId);
             });
             return;
         }
 
         // Method 2: Try REST Sessions API
-        self._playViaSession(itemId, startPositionTicks, audioStreamIndex, subtitleStreamIndex);
+        self._playViaSession(itemId, startPositionTicks, audioStreamIndex, subtitleStreamIndex, mediaSourceId);
     },
 
-    _playViaSession: function(itemId, startPositionTicks, audioStreamIndex, subtitleStreamIndex) {
+    _playViaSession: function(itemId, startPositionTicks, audioStreamIndex, subtitleStreamIndex, mediaSourceId) {
         var self = this;
         var serverUrl = this.getServerUrl();
         var headers = this.getAuthHeaders();
@@ -943,6 +961,7 @@ var Details = {
                 StartPositionTicks: startPositionTicks || 0,
                 PlayCommand: 'PlayNow'
             };
+            if (mediaSourceId) body.MediaSourceId = mediaSourceId;
             if (audioStreamIndex != null) body.AudioStreamIndex = audioStreamIndex;
             if (subtitleStreamIndex != null && subtitleStreamIndex !== -1) {
                 body.SubtitleStreamIndex = subtitleStreamIndex;
@@ -1090,12 +1109,16 @@ var Details = {
             case 'play':
                 this.hide(true);
                 var resumeTicks = (item.UserData && item.UserData.PlaybackPositionTicks) ? item.UserData.PlaybackPositionTicks : 0;
-                this.playItem(item.Id, resumeTicks, this._selectedAudioIndex, this._selectedSubtitleIndex);
+                this.playItem(item.Id, resumeTicks, this._selectedAudioIndex, this._selectedSubtitleIndex, this._selectedMediaSourceId);
                 break;
 
             case 'restart':
                 this.hide(true);
-                this.playItem(item.Id, 0, this._selectedAudioIndex, this._selectedSubtitleIndex);
+                this.playItem(item.Id, 0, this._selectedAudioIndex, this._selectedSubtitleIndex, this._selectedMediaSourceId);
+                break;
+
+            case 'version':
+                this.showVersionPicker(item);
                 break;
 
             case 'audio':
@@ -1508,9 +1531,117 @@ var Details = {
         }, 2500);
     },
 
+    _getSelectedMediaSource: function(item) {
+        if (!item.MediaSources || !this._selectedMediaSourceId) return item.MediaSources ? item.MediaSources[0] : null;
+        return item.MediaSources.find(function(s) { return s.Id === Details._selectedMediaSourceId; }) || item.MediaSources[0];
+    },
+
+    _getMediaStreams: function(item) {
+        var source = this._getSelectedMediaSource(item);
+        return source ? source.MediaStreams || item.MediaStreams || [] : item.MediaStreams || [];
+    },
+
+    showVersionPicker: function(item) {
+        var self = this;
+        if (!item.MediaSources || item.MediaSources.length < 2) return;
+
+        var overlay = document.createElement('div');
+        overlay.className = 'moonfin-more-overlay';
+
+        var menuHtml = '<div class="moonfin-more-menu">' +
+            '<h3 class="moonfin-more-title">Version</h3>' +
+            '<div class="moonfin-more-items">';
+
+        for (var i = 0; i < item.MediaSources.length; i++) {
+            var src = item.MediaSources[i];
+            var isSelected = src.Id === self._selectedMediaSourceId;
+            menuHtml += '<button class="moonfin-more-item moonfin-focusable' + (isSelected ? ' active' : '') + '" data-source-id="' + src.Id + '" tabindex="0">' +
+                '<span class="moonfin-more-item-icon"><svg viewBox="0 -960 960 960" fill="currentColor"><path d="M320-280h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-560v-160H240v640h480v-480H520ZM240-800v160-160 640-640Z"/></svg></span>' +
+                '<span class="moonfin-more-item-text">' + (src.Name || ('Version ' + (i + 1))) + '</span>' +
+            '</button>';
+        }
+
+        menuHtml += '</div></div>';
+        overlay.innerHTML = menuHtml;
+
+        var closeOverlay = function() {
+            if (overlay._escHandler) document.removeEventListener('keydown', overlay._escHandler, true);
+            overlay.remove();
+        };
+
+        overlay.addEventListener('click', function(e) { if (e.target === overlay) closeOverlay(); });
+        overlay._escHandler = function(e) {
+            if (e.key === 'Escape' || e.keyCode === 27 || e.keyCode === 461 || e.keyCode === 10009) {
+                e.preventDefault(); e.stopPropagation(); closeOverlay();
+            }
+        };
+        document.addEventListener('keydown', overlay._escHandler, true);
+
+        var btns = overlay.querySelectorAll('[data-source-id]');
+        for (var j = 0; j < btns.length; j++) {
+            (function(btn) {
+                btn.addEventListener('click', function() {
+                    var sourceId = btn.getAttribute('data-source-id');
+                    self._selectedMediaSourceId = sourceId;
+
+                    var versionBtn = self.container ? self.container.querySelector('[data-action="version"]') : null;
+                    if (versionBtn) {
+                        var label = versionBtn.querySelector('.moonfin-btn-label');
+                        if (label) label.textContent = btn.querySelector('.moonfin-more-item-text').textContent;
+                    }
+
+                    var newSource = item.MediaSources.find(function(s) { return s.Id === sourceId; });
+                    if (newSource) {
+                        var streams = newSource.MediaStreams || [];
+                        var audioTracks = streams.filter(function(s) { return s.Type === 'Audio'; });
+                        var subtitleTracks = streams.filter(function(s) { return s.Type === 'Subtitle'; });
+
+                        self._selectedAudioIndex = newSource.DefaultAudioStreamIndex != null ? newSource.DefaultAudioStreamIndex : null;
+                        var audioBtn = self.container ? self.container.querySelector('[data-action="audio"]') : null;
+                        if (audioBtn) {
+                            if (audioTracks.length > 1) {
+                                var audioTrack = audioTracks.find(function(t) { return t.Index === self._selectedAudioIndex; });
+                                audioBtn.querySelector('.moonfin-btn-label').textContent = audioTrack ? (audioTrack.DisplayTitle || 'Audio') : 'Audio';
+                                audioBtn.style.display = '';
+                            } else {
+                                audioBtn.style.display = 'none';
+                                self._selectedAudioIndex = null;
+                            }
+                        }
+
+                        self._selectedSubtitleIndex = newSource.DefaultSubtitleStreamIndex != null ? newSource.DefaultSubtitleStreamIndex : -1;
+                        var subBtn = self.container ? self.container.querySelector('[data-action="subtitle"]') : null;
+                        if (subBtn) {
+                            if (subtitleTracks.length > 0) {
+                                if (self._selectedSubtitleIndex === -1) {
+                                    subBtn.querySelector('.moonfin-btn-label').textContent = 'Off';
+                                } else {
+                                    var subTrack = subtitleTracks.find(function(t) { return t.Index === self._selectedSubtitleIndex; });
+                                    subBtn.querySelector('.moonfin-btn-label').textContent = subTrack ? (subTrack.DisplayTitle || 'Subtitles') : 'Subtitles';
+                                }
+                                subBtn.style.display = '';
+                            } else {
+                                subBtn.style.display = 'none';
+                                self._selectedSubtitleIndex = -1;
+                            }
+                        }
+                    }
+
+                    closeOverlay();
+                });
+            })(btns[j]);
+        }
+
+        document.body.appendChild(overlay);
+        setTimeout(function() {
+            var first = overlay.querySelector('.moonfin-more-item');
+            if (first) first.focus();
+        }, 50);
+    },
+
     showAudioPicker: function(item) {
         var self = this;
-        var audioTracks = (item.MediaStreams || []).filter(function(s) { return s.Type === 'Audio'; });
+        var audioTracks = this._getMediaStreams(item).filter(function(s) { return s.Type === 'Audio'; });
         if (audioTracks.length < 2) return;
 
         var overlay = document.createElement('div');
@@ -1568,7 +1699,7 @@ var Details = {
 
     showSubtitlePicker: function(item) {
         var self = this;
-        var subtitleTracks = (item.MediaStreams || []).filter(function(s) { return s.Type === 'Subtitle'; });
+        var subtitleTracks = this._getMediaStreams(item).filter(function(s) { return s.Type === 'Subtitle'; });
         if (subtitleTracks.length === 0) return;
 
         var overlay = document.createElement('div');
