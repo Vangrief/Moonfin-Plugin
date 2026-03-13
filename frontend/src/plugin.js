@@ -1010,10 +1010,16 @@ const Plugin = {
             if (navEnabled) {
                 if (navPosition === 'left') {
                     if (Navbar.initialized) Navbar.destroy();
-                    if (!Sidebar.initialized) Sidebar.init();
+                    if (!Sidebar.initialized) {
+                        Sidebar.init();
+                        if (Jellyseerr.config) Sidebar.updateJellyseerrButton(Jellyseerr.config);
+                    }
                 } else {
                     if (Sidebar.initialized) Sidebar.destroy();
-                    if (!Navbar.initialized) Navbar.init();
+                    if (!Navbar.initialized) {
+                        Navbar.init();
+                        if (Jellyseerr.config) Navbar.updateJellyseerrButton(Jellyseerr.config);
+                    }
                 }
             } else {
                 if (Navbar.initialized) Navbar.destroy();
