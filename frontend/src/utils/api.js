@@ -581,5 +581,42 @@ const API = {
             console.warn('[Moonfin] Failed to open item identifier:', e);
             return false;
         });
+    },
+
+    _playbackManager: null,
+
+    getPlaybackManager: function() {
+        if (this._playbackManager) return this._playbackManager;
+        if (!this._initWebpackRequire()) return null;
+
+        var req = window.__moonfin_wp_require;
+        var cache = req.c || {};
+        var factories = req.m || {};
+        var keys = Object.keys(factories);
+
+        for (var i = 0; i < keys.length; i++) {
+            var id = keys[i];
+            var mod;
+
+            if (cache[id]) {
+                mod = cache[id].exports;
+            } else {
+                var src;
+                try { src = factories[id].toString(); } catch(e) { continue; }
+                if (src.indexOf('playRequestToPlayer') === -1) continue;
+                try { mod = req(id); } catch(e) { continue; }
+            }
+
+            if (!mod) continue;
+            var pm = mod.playbackManager || (mod.default && mod.default.playbackManager);
+            if (!pm && mod.default && typeof mod.default.play === 'function' && typeof mod.default.stop === 'function' && typeof mod.default.seek === 'function') {
+                pm = mod.default;
+            }
+            if (pm && typeof pm.play === 'function') {
+                this._playbackManager = pm;
+                return pm;
+            }
+        }
+        return null;
     }
 };
