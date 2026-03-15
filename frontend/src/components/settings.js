@@ -1153,11 +1153,10 @@ var Settings = {
         API.getUserViews().then(function(views) {
             if (!self.dialog) return;
 
-            // Filter to media libraries (Movies, TV Shows, Music, etc.)
             var libraries = [];
             for (var i = 0; i < views.length; i++) {
                 var ct = views[i].CollectionType;
-                if (ct === 'movies' || ct === 'tvshows' || ct === 'music' || ct === 'mixed') {
+                if (ct === 'movies' || ct === 'tvshows' || ct === 'mixed') {
                     libraries.push(views[i]);
                 }
             }
@@ -1174,18 +1173,18 @@ var Settings = {
             for (var j = 0; j < libraries.length; j++) {
                 var lib = libraries[j];
                 var isChecked = selectedIds.indexOf(lib.Id) !== -1;
-                var typeBadge = (lib.CollectionType || 'library').charAt(0).toUpperCase() +
-                    (lib.CollectionType || 'library').slice(1);
+
+                var typeLabel = lib.CollectionType === 'movies' ? 'Movies' : lib.CollectionType === 'tvshows' ? 'Shows' : 'Mixed';
 
                 html +=
                     '<label class="moonfin-collection-item' + (isChecked ? ' moonfin-collection-item-active' : '') + '">' +
                         '<input type="checkbox" data-library-id="' + lib.Id + '"' + (isChecked ? ' checked' : '') + '>' +
                         '<div class="moonfin-collection-poster moonfin-collection-poster-empty" style="display:flex;align-items:center;justify-content:center;font-size:16px;">' +
-                            (lib.CollectionType === 'movies' ? '🎬' : lib.CollectionType === 'tvshows' ? '📺' : lib.CollectionType === 'music' ? '🎵' : '📁') +
+                            (lib.CollectionType === 'movies' ? '🎬' : lib.CollectionType === 'tvshows' ? '📺' : '📁') +
                         '</div>' +
                         '<div class="moonfin-collection-info">' +
                             '<div class="moonfin-collection-name">' + Settings._esc(lib.Name || 'Untitled') + '</div>' +
-                            '<div class="moonfin-collection-type">' + typeBadge + '</div>' +
+                            '<div class="moonfin-collection-type">' + typeLabel + '</div>' +
                         '</div>' +
                     '</label>';
             }

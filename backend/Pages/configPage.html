@@ -369,7 +369,7 @@
                     ApiClient.getUserViews(userId).then(function(result) {
                         var items = (result.Items || []).filter(function(item) {
                             var ct = item.CollectionType;
-                            return ct === 'movies' || ct === 'tvshows' || ct === 'music' || ct === 'mixed';
+                            return ct === 'movies' || ct === 'tvshows' || ct === 'mixed';
                         });
                         if (items.length === 0) {
                             picker.innerHTML = '<div style="padding:8px;color:rgba(255,255,255,0.5);font-size:0.9em;">No media libraries found.</div>';
@@ -379,13 +379,14 @@
                         for (var i = 0; i < items.length; i++) {
                             var item = items[i];
                             var isChecked = selectedIds.indexOf(item.Id) !== -1;
-                            var typeBadge = (item.CollectionType || 'library').charAt(0).toUpperCase() + (item.CollectionType || 'library').slice(1);
-                            var emoji = item.CollectionType === 'movies' ? '🎬' : item.CollectionType === 'tvshows' ? '📺' : item.CollectionType === 'music' ? '🎵' : '📁';
+                            var emoji = item.CollectionType === 'movies' ? '🎬' : item.CollectionType === 'tvshows' ? '📺' : '📁';
+                            var typeLabel = item.CollectionType === 'movies' ? 'Movies' : item.CollectionType === 'tvshows' ? 'Shows' : 'Mixed';
                             html += '<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;cursor:pointer;' + (isChecked ? 'background:rgba(0,164,220,0.1);' : '') + '">' +
                                 '<input type="checkbox" class="adminLibraryCb" data-id="' + item.Id + '"' + (isChecked ? ' checked' : '') + ' style="accent-color:#00a4dc;width:16px;height:16px;">' +
                                 '<span style="font-size:18px;">' + emoji + '</span>' +
                                 '<div style="flex:1;min-width:0;"><div style="font-size:0.9em;color:rgba(255,255,255,0.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(item.Name || 'Untitled') + '</div>' +
-                                '<div style="font-size:0.78em;color:rgba(255,255,255,0.4);">' + typeBadge + '</div></div></label>';
+                                '<div style="font-size:0.75em;color:rgba(255,255,255,0.4);">' + typeLabel + '</div>' +
+                                '</div></label>';
                         }
                         picker.innerHTML = html;
                     });
