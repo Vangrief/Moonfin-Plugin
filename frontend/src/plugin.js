@@ -2,6 +2,7 @@ const Plugin = {
     version: '1.5.1',
     name: 'Moonfin Web Plugin',
     initialized: false,
+    _initializing: false,
     _currentUserId: null,
 
     isHomePage() {
@@ -59,7 +60,8 @@ const Plugin = {
     },
 
     async init() {
-        if (this.initialized) return;
+        if (this.initialized || this._initializing) return;
+        this._initializing = true;
 
         if (!this._listenersRegistered) {
             this.setupGlobalListeners();
@@ -68,6 +70,7 @@ const Plugin = {
 
         if (this.isAdminPage()) {
             console.log('[Moonfin] Skipping initialization on admin page');
+            this._initializing = false;
             return;
         }
 
@@ -86,6 +89,7 @@ const Plugin = {
 
         this._currentUserId = this._getLoggedInUserId();
 
+        Storage.checkUserOwnership(this._currentUserId);
         Storage.initSync();
 
         try {
@@ -110,6 +114,7 @@ const Plugin = {
             Details.init();
             SyncPlay.init();
             this.initSeasonalEffects();
+            await this.seedHomeRowOrder();
 
             if (Device.isTV()) {
                 TVNavigation.init();
@@ -119,6 +124,7 @@ const Plugin = {
         }
 
         this.initialized = true;
+        this._initializing = false;
         console.log('[Moonfin] Plugin initialized successfully');
     },
 
@@ -129,6 +135,75 @@ const Plugin = {
         document.body.classList.toggle('moonfin-tv', device.isTV);
         document.body.classList.toggle('moonfin-touch', device.hasTouch);
         document.body.dataset.moonfinDevice = device.type;
+    },
+
+    applyHomeRowOrder() {
+        const homeRowOrder = Storage.get('homeRowOrder');
+        if (!homeRowOrder || !homeRowOrder.length) return;
+
+        const api = API.getApiClient();
+        if (!api) return;
+
+        const userId = api.getCurrentUserId();
+        if (!userId) return;
+
+        const customPrefs = {};
+        for (let i = 0; i < 8; i++) {
+            customPrefs['homesection' + i] = i < homeRowOrder.length ? homeRowOrder[i] : 'none';
+        }
+
+        api.getDisplayPreferences('usersettings', userId, 'emby').then(function(prefs) {
+            let changed = false;
+            for (const key in customPrefs) {
+                if (prefs.CustomPrefs[key] !== customPrefs[key]) {
+                    prefs.CustomPrefs[key] = customPrefs[key];
+                    changed = true;
+                }
+            }
+            if (!changed) return false;
+            return api.updateDisplayPreferences('usersettings', prefs, userId, 'emby').then(function() { return true; });
+        }).then(function(updated) {
+            if (updated) {
+                console.log('[Moonfin] Home row order applied');
+            }
+        }).catch(function(err) {
+            console.error('[Moonfin] Failed to apply home row order', err);
+        });
+    },
+
+    async seedHomeRowOrder() {
+        const profiles = Storage.getProfiles();
+        const hasExplicit = Object.keys(profiles).some(function(key) {
+            return profiles[key].homeRowOrder && profiles[key].homeRowOrder.length;
+        });
+        if (hasExplicit) {
+            this.applyHomeRowOrder();
+            return;
+        }
+
+        const api = API.getApiClient();
+        if (!api) return;
+
+        const userId = api.getCurrentUserId();
+        if (!userId) return;
+
+        try {
+            const prefs = await api.getDisplayPreferences('usersettings', userId, 'emby');
+            const customPrefs = prefs.CustomPrefs || {};
+            const order = [];
+            for (let i = 0; i < 8; i++) {
+                const val = customPrefs['homesection' + i];
+                if (val && val !== 'none') {
+                    order.push(val);
+                }
+            }
+            if (order.length) {
+                Storage.set('homeRowOrder', order);
+                console.log('[Moonfin] Seeded home row order from server:', order);
+            }
+        } catch (err) {
+            console.error('[Moonfin] Failed to fetch home row order', err);
+        }
     },
 
     loadStyles() {
@@ -1293,6 +1368,7 @@ const Plugin = {
         this._currentUserId = null;
         this._overlayHistoryDepth = 0;
         this.initialized = false;
+        this._initializing = false;
 
         this.init();
     },

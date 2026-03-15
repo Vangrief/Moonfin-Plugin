@@ -62,7 +62,7 @@ const Navbar = {
         }
 
         var settings = Storage.getAll();
-        var overlayColor = Storage.getColorRgba(settings.mediaBarOverlayColor, settings.mediaBarOverlayOpacity);
+        var overlayColor = Storage.getColorRgba(settings.mediaBarOverlayColor, settings.mediaBarOpacity);
 
         this.container = document.createElement('nav');
         this.container.className = 'moonfin-navbar';
@@ -547,7 +547,7 @@ const Navbar = {
     applySettings(settings) {
         if (!this.container) return;
 
-        var overlayColor = Storage.getColorRgba(settings.mediaBarOverlayColor, settings.mediaBarOverlayOpacity);
+        var overlayColor = Storage.getColorRgba(settings.mediaBarOverlayColor, settings.mediaBarOpacity);
         
         var pill = this.container.querySelector('.moonfin-nav-pill');
         if (pill) {

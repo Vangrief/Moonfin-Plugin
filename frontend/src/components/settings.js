@@ -112,6 +112,152 @@ var Settings = {
         '</div>';
     },
 
+    _initSortableList: function(listElement, onSave) {
+        var dragItem = null;
+        var dragPlaceholder = document.createElement('div');
+        dragPlaceholder.className = 'moonfin-sortable-placeholder';
+
+        var collectAndSave = function() {
+            var items = listElement.querySelectorAll('.moonfin-sortable-item');
+            var enabled = [];
+            for (var i = 0; i < items.length; i++) {
+                if (items[i].classList.contains('moonfin-sortable-item-active')) {
+                    enabled.push(items[i].getAttribute('data-source'));
+                }
+            }
+            onSave(enabled);
+        };
+
+        listElement.addEventListener('dragstart', function(e) {
+            if (!e.target.closest('.moonfin-sortable-handle')) {
+                e.preventDefault();
+                return;
+            }
+            var item = e.target.closest('.moonfin-sortable-item');
+            if (!item) return;
+            dragItem = item;
+            item.classList.add('moonfin-sortable-dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', '');
+        });
+
+        listElement.addEventListener('dragend', function() {
+            if (dragItem) {
+                dragItem.classList.remove('moonfin-sortable-dragging');
+                dragItem = null;
+            }
+            if (dragPlaceholder.parentNode) {
+                dragPlaceholder.parentNode.removeChild(dragPlaceholder);
+            }
+        });
+
+        listElement.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            var target = e.target.closest('.moonfin-sortable-item');
+            if (!target || target === dragItem) return;
+
+            var rect = target.getBoundingClientRect();
+            var midY = rect.top + rect.height / 2;
+            if (e.clientY < midY) {
+                listElement.insertBefore(dragPlaceholder, target);
+            } else {
+                listElement.insertBefore(dragPlaceholder, target.nextSibling);
+            }
+        });
+
+        listElement.addEventListener('drop', function(e) {
+            e.preventDefault();
+            if (!dragItem) return;
+            if (dragPlaceholder.parentNode) {
+                listElement.insertBefore(dragItem, dragPlaceholder);
+                dragPlaceholder.parentNode.removeChild(dragPlaceholder);
+            }
+            collectAndSave();
+        });
+
+        listElement.addEventListener('click', function(e) {
+            var item;
+            var checkbox = e.target.closest('.moonfin-sortable-checkbox input[type="checkbox"]');
+            if (checkbox) {
+                item = checkbox.closest('.moonfin-sortable-item');
+                if (!item) return;
+                item.classList.toggle('moonfin-sortable-item-active', checkbox.checked);
+                collectAndSave();
+                return;
+            }
+            var toggleBtn = e.target.closest('.moonfin-sortable-toggle');
+            if (!toggleBtn) return;
+            item = toggleBtn.closest('.moonfin-sortable-item');
+            if (!item) return;
+            var isActive = item.classList.toggle('moonfin-sortable-item-active');
+            var svg = toggleBtn.querySelector('path');
+            if (svg) {
+                svg.setAttribute('d', isActive
+                    ? 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'
+                    : 'M19 13H5v-2h14v2z');
+            }
+            toggleBtn.title = isActive ? 'Disable' : 'Enable';
+            collectAndSave();
+        });
+
+        (function() {
+            var touchItem = null;
+            var touchClone = null;
+            var touchOffsetY = 0;
+
+            listElement.addEventListener('touchstart', function(e) {
+                var handle = e.target.closest('.moonfin-sortable-handle');
+                if (!handle) return;
+                var item = handle.closest('.moonfin-sortable-item');
+                if (!item) return;
+                touchItem = item;
+                var rect = item.getBoundingClientRect();
+                touchOffsetY = e.touches[0].clientY - rect.top;
+                touchClone = item.cloneNode(true);
+                touchClone.className = 'moonfin-sortable-item moonfin-sortable-touch-clone';
+                touchClone.style.width = rect.width + 'px';
+                touchClone.style.top = rect.top + 'px';
+                touchClone.style.left = rect.left + 'px';
+                document.body.appendChild(touchClone);
+                item.classList.add('moonfin-sortable-dragging');
+            }, { passive: true });
+
+            listElement.addEventListener('touchmove', function(e) {
+                if (!touchItem || !touchClone) return;
+                e.preventDefault();
+                var y = e.touches[0].clientY;
+                touchClone.style.top = (y - touchOffsetY) + 'px';
+
+                var items = listElement.querySelectorAll('.moonfin-sortable-item:not(.moonfin-sortable-dragging)');
+                for (var i = 0; i < items.length; i++) {
+                    var rect = items[i].getBoundingClientRect();
+                    var midY = rect.top + rect.height / 2;
+                    if (y < midY) {
+                        listElement.insertBefore(touchItem, items[i]);
+                        return;
+                    }
+                }
+                listElement.appendChild(touchItem);
+            }, { passive: false });
+
+            listElement.addEventListener('touchend', function() {
+                var wasDragging = !!touchItem;
+                if (touchItem) {
+                    touchItem.classList.remove('moonfin-sortable-dragging');
+                    touchItem = null;
+                }
+                if (touchClone && touchClone.parentNode) {
+                    touchClone.parentNode.removeChild(touchClone);
+                    touchClone = null;
+                }
+                if (wasDragging) {
+                    collectAndSave();
+                }
+            }, { passive: true });
+        })();
+    },
+
     createSection: function(icon, title, contentHtml, openByDefault) {
         return '<details class="moonfin-panel-section"' + (openByDefault ? ' open' : '') + '>' +
             '<summary class="moonfin-panel-summary">' + (icon ? icon + ' ' : '') + title + '</summary>' +
@@ -187,7 +333,7 @@ var Settings = {
         var overlayContent =
             this.createSelectCard('mediaBarOverlayColor', 'Overlay Color', 'Color of the gradient overlay on media bar items', colorOptions, settings.mediaBarOverlayColor) +
             '<div class="moonfin-color-preview" id="moonfin-color-preview" style="background:' + Storage.getColorHex(settings.mediaBarOverlayColor) + '"></div>' +
-            this.createRangeCard('mediaBarOverlayOpacity', 'Overlay Opacity', 'Transparency of the gradient overlay', 0, 100, 5, settings.mediaBarOverlayOpacity, '%');
+            this.createRangeCard('mediaBarOpacity', 'Overlay Opacity', 'Transparency of the gradient overlay', 0, 100, 5, settings.mediaBarOpacity, '%');
 
         var toolbarContent =
             this.createToggleCard('showShuffleButton', 'Shuffle Button', 'Show random content button in the toolbar', settings.showShuffleButton) +
@@ -332,6 +478,50 @@ var Settings = {
                 '</div>' +
             '</div>';
 
+        var homeSections = [
+            { key: 'smalllibrarytiles', label: 'My Media' },
+            { key: 'librarybuttons',    label: 'My Media (Small)' },
+            { key: 'resume',            label: 'Continue Watching' },
+            { key: 'resumeaudio',       label: 'Continue Listening' },
+            { key: 'resumebook',        label: 'Continue Reading' },
+            { key: 'nextup',            label: 'Next Up' },
+            { key: 'latestmedia',       label: 'Latest Media' },
+            { key: 'livetv',            label: 'Live TV' },
+            { key: 'activerecordings',  label: 'Active Recordings' }
+        ];
+        var selectedRows = (settings.homeRowOrder && settings.homeRowOrder.length) ? settings.homeRowOrder : Storage.defaults.homeRowOrder;
+
+        var orderedRows = [];
+        for (var ri = 0; ri < selectedRows.length; ri++) {
+            for (var rj = 0; rj < homeSections.length; rj++) {
+                if (homeSections[rj].key === selectedRows[ri]) {
+                    orderedRows.push({ key: homeSections[rj].key, label: homeSections[rj].label, enabled: true });
+                    break;
+                }
+            }
+        }
+        for (var rk = 0; rk < homeSections.length; rk++) {
+            if (selectedRows.indexOf(homeSections[rk].key) === -1) {
+                orderedRows.push({ key: homeSections[rk].key, label: homeSections[rk].label, enabled: false });
+            }
+        }
+
+        var rowItems = '';
+        for (var rsi = 0; rsi < orderedRows.length; rsi++) {
+            var row = orderedRows[rsi];
+            rowItems += '<div class="moonfin-sortable-item' + (row.enabled ? ' moonfin-sortable-item-active' : '') + '" draggable="true" data-source="' + row.key + '">' +
+                '<span class="moonfin-sortable-handle">' +
+                    '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M3 15h18v-2H3v2zm0 4h18v-2H3v2zm0-8h18V9H3v2zm0-6v2h18V5H3z"/></svg>' +
+                '</span>' +
+                '<span class="moonfin-sortable-label">' + row.label + '</span>' +
+                '<label class="moonfin-sortable-checkbox"><input type="checkbox"' + (row.enabled ? ' checked' : '') + '></label>' +
+            '</div>';
+        }
+
+        var homeRowContent =
+            '<p class="moonfin-toggle-desc" style="margin:0 0 8px 0">Drag to reorder. Check or uncheck to show or hide a section. Changes are saved to the Jellyfin server per device profile.</p>' +
+            '<div class="moonfin-sortable-list" id="moonfin-homerows-sortable">' + rowItems + '</div>';
+
         var currentDeviceProfile = Device.getProfileName();
         var profileLabels = { global: 'All Devices', desktop: 'Desktop', mobile: 'Mobile', tv: 'TV' };
         var profileTabsHtml = '<div class="moonfin-profile-tabs">';
@@ -373,6 +563,7 @@ var Settings = {
                     this.createSection('', 'Display', displayContent) +
                     this.createSection('', 'TMDB Episode Ratings', tmdbContent) +
                     this.createSection('', 'MDBList Ratings', mdblistContent) +
+                    this.createSection('', 'Home Screen Rows', homeRowContent) +
                     '<div class="moonfin-settings-jellyseerr-wrapper" style="display:none">' +
                         this.createSection('', 'Jellyseerr', jellyseerrContent) +
                     '</div>' +
@@ -770,139 +961,21 @@ var Settings = {
             });
         }
 
-        // --- Sortable rating sources ---
         var sortableList = this.dialog.querySelector('#moonfin-sources-sortable');
         if (sortableList) {
-            var dragItem = null;
-            var dragPlaceholder = document.createElement('div');
-            dragPlaceholder.className = 'moonfin-sortable-placeholder';
-
-            var saveSortableState = function() {
-                var items = sortableList.querySelectorAll('.moonfin-sortable-item');
-                var enabled = [];
-                for (var i = 0; i < items.length; i++) {
-                    if (items[i].classList.contains('moonfin-sortable-item-active')) {
-                        enabled.push(items[i].getAttribute('data-source'));
-                    }
-                }
+            this._initSortableList(sortableList, function(enabled) {
                 self.saveSetting('mdblistRatingSources', enabled);
                 self.showToast('Rating sources updated');
-            };
-
-            sortableList.addEventListener('dragstart', function(e) {
-                var item = e.target.closest('.moonfin-sortable-item');
-                if (!item) return;
-                dragItem = item;
-                item.classList.add('moonfin-sortable-dragging');
-                e.dataTransfer.effectAllowed = 'move';
-                e.dataTransfer.setData('text/plain', '');
             });
+        }
 
-            sortableList.addEventListener('dragend', function() {
-                if (dragItem) {
-                    dragItem.classList.remove('moonfin-sortable-dragging');
-                    dragItem = null;
-                }
-                if (dragPlaceholder.parentNode) {
-                    dragPlaceholder.parentNode.removeChild(dragPlaceholder);
-                }
+        var homeRowList = this.dialog.querySelector('#moonfin-homerows-sortable');
+        if (homeRowList) {
+            this._initSortableList(homeRowList, function(enabled) {
+                self.saveSetting('homeRowOrder', enabled);
+                Plugin.applyHomeRowOrder();
+                self.showToast('Home screen rows updated');
             });
-
-            sortableList.addEventListener('dragover', function(e) {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                var target = e.target.closest('.moonfin-sortable-item');
-                if (!target || target === dragItem) return;
-
-                var rect = target.getBoundingClientRect();
-                var midY = rect.top + rect.height / 2;
-                if (e.clientY < midY) {
-                    sortableList.insertBefore(dragPlaceholder, target);
-                } else {
-                    sortableList.insertBefore(dragPlaceholder, target.nextSibling);
-                }
-            });
-
-            sortableList.addEventListener('drop', function(e) {
-                e.preventDefault();
-                if (!dragItem) return;
-                if (dragPlaceholder.parentNode) {
-                    sortableList.insertBefore(dragItem, dragPlaceholder);
-                    dragPlaceholder.parentNode.removeChild(dragPlaceholder);
-                }
-                saveSortableState();
-            });
-
-            // Toggle enable/disable
-            sortableList.addEventListener('click', function(e) {
-                var toggleBtn = e.target.closest('.moonfin-sortable-toggle');
-                if (!toggleBtn) return;
-                var item = toggleBtn.closest('.moonfin-sortable-item');
-                if (!item) return;
-                var isActive = item.classList.toggle('moonfin-sortable-item-active');
-                var svg = toggleBtn.querySelector('path');
-                if (svg) {
-                    svg.setAttribute('d', isActive
-                        ? 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'
-                        : 'M19 13H5v-2h14v2z');
-                }
-                toggleBtn.title = isActive ? 'Disable' : 'Enable';
-                saveSortableState();
-            });
-
-            // Touch drag support for mobile / TV
-            (function() {
-                var touchItem = null;
-                var touchClone = null;
-                var touchOffsetY = 0;
-
-                sortableList.addEventListener('touchstart', function(e) {
-                    var handle = e.target.closest('.moonfin-sortable-handle');
-                    if (!handle) return;
-                    var item = handle.closest('.moonfin-sortable-item');
-                    if (!item) return;
-                    touchItem = item;
-                    var rect = item.getBoundingClientRect();
-                    touchOffsetY = e.touches[0].clientY - rect.top;
-                    touchClone = item.cloneNode(true);
-                    touchClone.className = 'moonfin-sortable-item moonfin-sortable-touch-clone';
-                    touchClone.style.width = rect.width + 'px';
-                    touchClone.style.top = rect.top + 'px';
-                    touchClone.style.left = rect.left + 'px';
-                    document.body.appendChild(touchClone);
-                    item.classList.add('moonfin-sortable-dragging');
-                }, { passive: true });
-
-                sortableList.addEventListener('touchmove', function(e) {
-                    if (!touchItem || !touchClone) return;
-                    e.preventDefault();
-                    var y = e.touches[0].clientY;
-                    touchClone.style.top = (y - touchOffsetY) + 'px';
-
-                    var items = sortableList.querySelectorAll('.moonfin-sortable-item:not(.moonfin-sortable-dragging)');
-                    for (var i = 0; i < items.length; i++) {
-                        var rect = items[i].getBoundingClientRect();
-                        var midY = rect.top + rect.height / 2;
-                        if (y < midY) {
-                            sortableList.insertBefore(touchItem, items[i]);
-                            return;
-                        }
-                    }
-                    sortableList.appendChild(touchItem);
-                }, { passive: false });
-
-                sortableList.addEventListener('touchend', function() {
-                    if (touchItem) {
-                        touchItem.classList.remove('moonfin-sortable-dragging');
-                        touchItem = null;
-                    }
-                    if (touchClone && touchClone.parentNode) {
-                        touchClone.parentNode.removeChild(touchClone);
-                        touchClone = null;
-                    }
-                    saveSortableState();
-                }, { passive: true });
-            })();
         }
 
         var loginBtn = this.dialog.querySelector('.moonfin-jellyseerr-settings-login-btn');

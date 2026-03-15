@@ -104,7 +104,7 @@ var MediaBar = {
         }
 
         var settings = Storage.getAll();
-        var overlayColor = Storage.getColorRgba(settings.mediaBarOverlayColor, settings.mediaBarOverlayOpacity);
+        var overlayColor = Storage.getColorRgba(settings.mediaBarOverlayColor, settings.mediaBarOpacity);
 
         this.container = document.createElement('div');
         this.container.className = 'moonfin-mediabar';
@@ -699,7 +699,7 @@ var MediaBar = {
             this.show();
         }
 
-        var overlayColor = Storage.getColorRgba(settings.mediaBarOverlayColor, settings.mediaBarOverlayOpacity);
+        var overlayColor = Storage.getColorRgba(settings.mediaBarOverlayColor, settings.mediaBarOpacity);
 
         var infoBox = this.container.querySelector('.moonfin-mediabar-info');
         if (infoBox) infoBox.style.background = overlayColor;

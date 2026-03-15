@@ -25,6 +25,7 @@ Moonfin requires the [File Transformation](https://github.com/IAmParadox27/jelly
 - **Featured Media Bar** - Hero slideshow with Ken Burns animation, content logos, and metadata overlay
 - **Jellyseerr/Seerr Panel** - Embedded Jellyseerr or Seerr iframe with automatic session-based authentication via the server proxy
 - **Settings Panel** - Per-user settings for all features, with device profiles and cross-client sync
+- **Home Screen Row Ordering** - Drag-and-drop reorder and toggle visibility of home screen sections (Continue Watching, Next Up, Latest Media, etc.); changes write directly to Jellyfin's DisplayPreferences so they take effect immediately
 - **Device Profiles** - Separate setting overrides for desktop, mobile, and TV; each profile inherits from a shared global base so you only configure what differs per device
 - **SyncPlay Integration** - Group watch UI with lobby, group management, and real-time state sync via WebSocket; modal dialog on desktop/mobile web, API-only on TV (native clients use their own dialog)
 - **TV Support** - Spatial navigation and remote-friendly focus management for webOS/Tizen
@@ -307,6 +308,7 @@ Settings stored on the server per-user and shared across all Moonfin clients. Ea
 | `mediaBarTrailerPreview` | bool | Enable trailer previews in media bar |
 | `tmdbApiKey` | string | TMDB API key for episode ratings |
 | `tmdbEpisodeRatingsEnabled` | bool | Enable TMDB episode ratings |
+| `homeRowOrder` | list | Ordered list of enabled home screen sections |
 
 ### Web-Only Settings (Not Synced)
 

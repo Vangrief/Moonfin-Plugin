@@ -3,6 +3,7 @@ const Storage = {
     PROFILES_KEY: 'moonfin_profiles',
     SNAPSHOT_KEY: 'moonfin_sync_snapshot',
     SYNC_PREF_KEY: 'moonfin_sync_enabled',
+    USER_ID_KEY: 'moonfin_userId',
     CLIENT_ID: 'moonfin-web',
 
     syncState: {
@@ -21,7 +22,7 @@ const Storage = {
 
         mediaBarEnabled: false,
         mediaBarItemCount: 10,
-        mediaBarOverlayOpacity: 50,
+        mediaBarOpacity: 50,
         mediaBarOverlayColor: 'gray',
         mediaBarAutoAdvance: true,
         mediaBarIntervalMs: 7000,
@@ -52,7 +53,9 @@ const Storage = {
         mdblistShowRatingNames: true,
 
         tmdbApiKey: '',
-        tmdbEpisodeRatingsEnabled: false
+        tmdbEpisodeRatingsEnabled: false,
+
+        homeRowOrder: ['smalllibrarytiles', 'resume', 'resumeaudio', 'resumebook', 'livetv', 'nextup', 'latestmedia']
     },
 
     colorOptions: {
@@ -438,7 +441,7 @@ const Storage = {
             detailsPageEnabled: 'detailsPageEnabled',
             mediaBarEnabled: 'mediaBarEnabled',
             mediaBarItemCount: 'mediaBarItemCount',
-            mediaBarOverlayOpacity: 'mediaBarOpacity',
+            mediaBarOpacity: 'mediaBarOpacity',
             mediaBarOverlayColor: 'mediaBarOverlayColor',
             mediaBarAutoAdvance: 'mediaBarAutoAdvance',
             mediaBarIntervalMs: 'mediaBarIntervalMs',
@@ -464,7 +467,8 @@ const Storage = {
             mdblistRatingSources: 'mdblistRatingSources',
             mdblistShowRatingNames: 'mdblistShowRatingNames',
             tmdbApiKey: 'tmdbApiKey',
-            tmdbEpisodeRatingsEnabled: 'tmdbEpisodeRatingsEnabled'
+            tmdbEpisodeRatingsEnabled: 'tmdbEpisodeRatingsEnabled',
+            homeRowOrder: 'homeRowOrder'
         };
         // Only include properties that have actual values — prevents undefined/null
         // from polluting merge operations and overwriting valid false values
@@ -486,7 +490,7 @@ const Storage = {
             detailsPageEnabled: localProfile.detailsPageEnabled,
             mediaBarEnabled: localProfile.mediaBarEnabled,
             mediaBarItemCount: localProfile.mediaBarItemCount,
-            mediaBarOpacity: localProfile.mediaBarOverlayOpacity,
+            mediaBarOpacity: localProfile.mediaBarOpacity,
             mediaBarOverlayColor: localProfile.mediaBarOverlayColor,
             mediaBarAutoAdvance: localProfile.mediaBarAutoAdvance,
             mediaBarIntervalMs: localProfile.mediaBarIntervalMs,
@@ -512,7 +516,8 @@ const Storage = {
             mdblistRatingSources: localProfile.mdblistRatingSources,
             mdblistShowRatingNames: localProfile.mdblistShowRatingNames,
             tmdbApiKey: localProfile.tmdbApiKey,
-            tmdbEpisodeRatingsEnabled: localProfile.tmdbEpisodeRatingsEnabled
+            tmdbEpisodeRatingsEnabled: localProfile.tmdbEpisodeRatingsEnabled,
+            homeRowOrder: localProfile.homeRowOrder
         };
     },
 
@@ -745,7 +750,9 @@ const Storage = {
         localStorage.removeItem(this.PROFILES_KEY);
         localStorage.removeItem(this.STORAGE_KEY);
         localStorage.removeItem(this.SNAPSHOT_KEY);
+        localStorage.removeItem(this.USER_ID_KEY);
         this._initialSyncDone = false;
+        this._activeEditProfile = 'global';
         this.syncState.serverAvailable = null;
         this.syncState.lastSyncTime = null;
         this.syncState.lastSyncError = null;
@@ -753,5 +760,15 @@ const Storage = {
         this.syncState.mdblistAvailable = false;
         this.syncState.tmdbAvailable = false;
         this.syncState.adminDefaults = null;
+    },
+
+    checkUserOwnership(currentUserId) {
+        if (!currentUserId) return;
+        const storedUserId = localStorage.getItem(this.USER_ID_KEY);
+        if (storedUserId && storedUserId !== currentUserId) {
+            console.log('[Moonfin] localStorage belongs to a different user, clearing...');
+            this.resetForNewUser();
+        }
+        localStorage.setItem(this.USER_ID_KEY, currentUserId);
     }
 };

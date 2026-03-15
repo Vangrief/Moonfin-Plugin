@@ -143,4 +143,7 @@ public class MoonfinSettingsProfile
 
     [JsonPropertyName("blockedRatings")]
     public List<string>? BlockedRatings { get; set; }
+
+    [JsonPropertyName("homeRowOrder")]
+    public List<string>? HomeRowOrder { get; set; }
 }
