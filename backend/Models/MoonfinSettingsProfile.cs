@@ -111,9 +111,6 @@ public class MoonfinSettingsProfile
     [JsonPropertyName("mediaBarCollectionIds")]
     public List<string>? MediaBarCollectionIds { get; set; }
 
-    [JsonPropertyName("mediaBarShuffleItems")]
-    public bool? MediaBarShuffleItems { get; set; }
-
     [JsonPropertyName("mediaBarLibraryIds")]
     public List<string>? MediaBarLibraryIds { get; set; }
 

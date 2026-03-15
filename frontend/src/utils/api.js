@@ -154,54 +154,6 @@ const API = {
         }
     },
 
-    async getCollectionItems(collectionIds, options = {}) {
-        const api = this.getApiClient();
-        if (!api || !collectionIds || collectionIds.length === 0) return [];
-
-        const { limit = 10, shuffle = true } = options;
-
-        try {
-            const userId = api.getCurrentUserId();
-            const allItems = [];
-            const seenIds = {};
-
-            for (var i = 0; i < collectionIds.length; i++) {
-                const result = await api.getItems(userId, {
-                    userId: userId,
-                    parentId: collectionIds[i],
-                    sortBy: shuffle ? 'Random' : 'SortName',
-                    recursive: true,
-                    fields: 'Overview,Genres,CommunityRating,CriticRating,OfficialRating,RunTimeTicks,ProductionYear,ProviderIds',
-                    imageTypeLimit: 1,
-                    enableImageTypes: 'Backdrop,Logo,Primary'
-                });
-
-                var items = result.Items || [];
-                for (var j = 0; j < items.length; j++) {
-                    if (!seenIds[items[j].Id]) {
-                        seenIds[items[j].Id] = true;
-                        allItems.push(items[j]);
-                    }
-                }
-            }
-
-            // Shuffle merged results if requested
-            if (shuffle) {
-                for (var k = allItems.length - 1; k > 0; k--) {
-                    var r = Math.floor(Math.random() * (k + 1));
-                    var temp = allItems[k];
-                    allItems[k] = allItems[r];
-                    allItems[r] = temp;
-                }
-            }
-
-            return allItems.slice(0, limit);
-        } catch (e) {
-            console.error('[Moonfin] Failed to get collection items:', e);
-            return [];
-        }
-    },
-
     async getItemTrailers(itemId) {
         const api = this.getApiClient();
         if (!api || !itemId) return [];

@@ -41,7 +41,6 @@ var MediaBar = {
         this._lastItemCount = settings.mediaBarItemCount;
         this._lastSourceType = settings.mediaBarSourceType;
         this._lastCollectionIds = settings.mediaBarCollectionIds;
-        this._lastShuffleItems = settings.mediaBarShuffleItems;
         this._lastLibraryIds = settings.mediaBarLibraryIds;
 
         this._loadContentAsync(settings);
@@ -721,13 +720,11 @@ var MediaBar = {
 
         if (this._lastItemCount !== settings.mediaBarItemCount ||
             this._lastSourceType !== settings.mediaBarSourceType ||
-            this._lastShuffleItems !== settings.mediaBarShuffleItems ||
             JSON.stringify(this._lastCollectionIds) !== JSON.stringify(settings.mediaBarCollectionIds) ||
             JSON.stringify(this._lastLibraryIds) !== JSON.stringify(settings.mediaBarLibraryIds)) {
             this._lastItemCount = settings.mediaBarItemCount;
             this._lastSourceType = settings.mediaBarSourceType;
             this._lastCollectionIds = settings.mediaBarCollectionIds;
-            this._lastShuffleItems = settings.mediaBarShuffleItems;
             this._lastLibraryIds = settings.mediaBarLibraryIds;
             this.loadContent();
         }

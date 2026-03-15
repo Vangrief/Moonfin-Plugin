@@ -284,7 +284,6 @@ Settings stored on the server per-user and shared across all Moonfin clients. Ea
 | `mediaBarSourceType` | string | Media bar content source (`library`, `collection`) |
 | `mediaBarLibraryIds` | list | Library IDs to pull media bar items from (empty = all libraries) |
 | `mediaBarCollectionIds` | list | Collection/playlist IDs for media bar (when source is `collection`) |
-| `mediaBarShuffleItems` | bool | Shuffle items in media bar |
 | `mediaBarItemCount` | int | Number of items in media bar |
 | `mediaBarOpacity` | int | Media bar overlay opacity (0–100) |
 | `mediaBarOverlayColor` | string | Media bar overlay color key |

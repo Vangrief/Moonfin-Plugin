@@ -167,7 +167,6 @@ var Settings = {
                         '<div class="moonfin-collection-picker-loading">Loading...</div>' +
                     '</div>' +
                 '</div>' +
-                this.createToggleCard('mediaBarShuffleItems', 'Shuffle Items', 'Randomize the order of items from selected collections', settings.mediaBarShuffleItems !== false) +
             '</div>' +
 
             this.createSelectCard('mediaBarItemCount', 'Number of Items', 'How many items to display', [

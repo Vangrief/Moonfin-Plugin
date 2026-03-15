@@ -103,8 +103,6 @@ public class MoonfinUserSettings
     public string? MediaBarSourceType { get; set; }
     [JsonPropertyName("mediaBarCollectionIds")]
     public List<string>? MediaBarCollectionIds { get; set; }
-    [JsonPropertyName("mediaBarShuffleItems")]
-    public bool? MediaBarShuffleItems { get; set; }
     [JsonPropertyName("mediaBarLibraryIds")]
     public List<string>? MediaBarLibraryIds { get; set; }
     [JsonPropertyName("seasonalSurprise")]

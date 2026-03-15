@@ -7,6 +7,7 @@ using MediaBrowser.Model.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Moonfin.Server.Models;
 using Moonfin.Server.Services;
 
@@ -23,6 +24,7 @@ public class MoonfinController : ControllerBase
     private readonly MoonfinSettingsService _settingsService;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILibraryManager _libraryManager;
+    private readonly ILogger<MoonfinController> _logger;
     
     // Cache for auto-detected variant
     private static string? _cachedVariant;
@@ -33,11 +35,13 @@ public class MoonfinController : ControllerBase
     public MoonfinController(
         MoonfinSettingsService settingsService,
         IHttpClientFactory httpClientFactory,
-        ILibraryManager libraryManager)
+        ILibraryManager libraryManager,
+        ILogger<MoonfinController> logger)
     {
         _settingsService = settingsService;
         _httpClientFactory = httpClientFactory;
         _libraryManager = libraryManager;
+        _logger = logger;
     }
 
     /// <summary>
@@ -561,29 +565,26 @@ public class MoonfinController : ControllerBase
     /// Sets OrderBy to Random on the query using reflection, avoiding direct
     /// reference to SortOrder which moved between Jellyfin 10.10 and 10.11.
     /// </summary>
-    private static void SetRandomOrder(InternalItemsQuery query)
+    private void SetRandomOrder(InternalItemsQuery query)
     {
         try
         {
-            // Find SortOrder enum type at runtime (works regardless of assembly)
             var orderByProp = typeof(InternalItemsQuery).GetProperty(nameof(InternalItemsQuery.OrderBy));
             if (orderByProp == null) return;
 
-            // Get the generic type args: (ItemSortBy, SortOrder)
             var elementType = orderByProp.PropertyType.GetGenericArguments()[0];
             var sortOrderType = elementType.GetGenericArguments()[1];
             var ascending = Enum.ToObject(sortOrderType, 0);
 
-            // Create the tuple (ItemSortBy.Random, SortOrder.Ascending)
             var tuple = Activator.CreateInstance(elementType, ItemSortBy.Random, ascending);
             var array = Array.CreateInstance(elementType, 1);
             array.SetValue(tuple, 0);
 
             orderByProp.SetValue(query, array);
         }
-        catch
+        catch (Exception ex)
         {
-            // Reflection failed — query will return items in default order, still functional
+            _logger.LogWarning(ex, "Failed to set random sort order via reflection; items will use default order");
         }
     }
 

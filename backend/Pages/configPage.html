@@ -161,13 +161,6 @@
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
-                                <input type="checkbox" id="DefaultMediaBarShuffleItems" is="emby-checkbox" />
-                                <span>Shuffle Media Bar Items</span>
-                            </label>
-                            <div class="fieldDescription">Randomize the order of items from collections/playlists by default.</div>
-                        </div>
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
                                 <input type="checkbox" id="DefaultDetailsPageEnabled" is="emby-checkbox" />
                                 <span>Details Page</span>
                             </label>
@@ -293,7 +286,6 @@
                     document.querySelector('#DefaultNavbarPosition').value = defaults.navbarPosition || '';
                     document.querySelector('#DefaultMediaBarEnabled').checked = !!defaults.mediaBarEnabled;
                     document.querySelector('#DefaultMediaBarSourceType').value = defaults.mediaBarSourceType || '';
-                    document.querySelector('#DefaultMediaBarShuffleItems').checked = defaults.mediaBarShuffleItems !== false;
                     document.querySelector('#DefaultDetailsPageEnabled').checked = !!defaults.detailsPageEnabled;
                     document.querySelector('#DefaultShowClock').checked = !!defaults.showClock;
                     document.querySelector('#DefaultShowShuffleButton').checked = !!defaults.showShuffleButton;
@@ -418,7 +410,6 @@
                             config.DefaultUserSettings.navbarPosition = document.querySelector('#DefaultNavbarPosition').value || null;
                             config.DefaultUserSettings.mediaBarEnabled = document.querySelector('#DefaultMediaBarEnabled').checked;
                             config.DefaultUserSettings.mediaBarSourceType = document.querySelector('#DefaultMediaBarSourceType').value || null;
-                            config.DefaultUserSettings.mediaBarShuffleItems = document.querySelector('#DefaultMediaBarShuffleItems').checked;
                             // Collect selected collection IDs
                             var collectionCbs = document.querySelectorAll('.adminCollectionCb:checked');
                             var collectionIds = [];
