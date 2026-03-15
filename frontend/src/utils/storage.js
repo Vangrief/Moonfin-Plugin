@@ -20,13 +20,16 @@ const Storage = {
         detailsPageEnabled: false,
 
         mediaBarEnabled: false,
-        mediaBarContentType: 'both',
         mediaBarItemCount: 10,
         mediaBarOverlayOpacity: 50,
         mediaBarOverlayColor: 'gray',
         mediaBarAutoAdvance: true,
         mediaBarIntervalMs: 7000,
         mediaBarTrailerPreview: true,
+        mediaBarSourceType: 'library',
+        mediaBarCollectionIds: [],
+        mediaBarShuffleItems: true,
+        mediaBarLibraryIds: [],
 
         showShuffleButton: true,
         showGenresButton: true,
@@ -102,12 +105,16 @@ const Storage = {
             profiles[profileName] = settings;
             localStorage.setItem(this.PROFILES_KEY, JSON.stringify(profiles));
 
-            // Dispatch change event with resolved settings for current device
-            const resolved = this.getAll();
-            window.dispatchEvent(new CustomEvent('moonfin-settings-changed', { detail: resolved }));
+            const dispatchChange = () => {
+                window.dispatchEvent(new CustomEvent('moonfin-settings-changed', { detail: this.getAll() }));
+            };
 
             if (syncToServer && this.syncState.serverAvailable && this.isSyncEnabled()) {
-                this.saveProfileToServer(profileName, settings);
+                // Dispatch after server sync so components re-fetching from the
+                // server (e.g. MediaBar) get up-to-date data
+                this.saveProfileToServer(profileName, settings).then(dispatchChange);
+            } else {
+                dispatchChange();
             }
         } catch (e) {
             console.error('[Moonfin] Failed to save profile:', e);
@@ -431,13 +438,16 @@ const Storage = {
             navbarEnabled: 'navbarEnabled',
             detailsPageEnabled: 'detailsPageEnabled',
             mediaBarEnabled: 'mediaBarEnabled',
-            mediaBarContentType: 'mediaBarContentType',
             mediaBarItemCount: 'mediaBarItemCount',
             mediaBarOverlayOpacity: 'mediaBarOpacity',
             mediaBarOverlayColor: 'mediaBarOverlayColor',
             mediaBarAutoAdvance: 'mediaBarAutoAdvance',
             mediaBarIntervalMs: 'mediaBarIntervalMs',
             mediaBarTrailerPreview: 'mediaBarTrailerPreview',
+            mediaBarSourceType: 'mediaBarSourceType',
+            mediaBarCollectionIds: 'mediaBarCollectionIds',
+            mediaBarShuffleItems: 'mediaBarShuffleItems',
+            mediaBarLibraryIds: 'mediaBarLibraryIds',
             showShuffleButton: 'showShuffleButton',
             showGenresButton: 'showGenresButton',
             showFavoritesButton: 'showFavoritesButton',
@@ -477,13 +487,16 @@ const Storage = {
             navbarEnabled: localProfile.navbarEnabled,
             detailsPageEnabled: localProfile.detailsPageEnabled,
             mediaBarEnabled: localProfile.mediaBarEnabled,
-            mediaBarContentType: localProfile.mediaBarContentType,
             mediaBarItemCount: localProfile.mediaBarItemCount,
             mediaBarOpacity: localProfile.mediaBarOverlayOpacity,
             mediaBarOverlayColor: localProfile.mediaBarOverlayColor,
             mediaBarAutoAdvance: localProfile.mediaBarAutoAdvance,
             mediaBarIntervalMs: localProfile.mediaBarIntervalMs,
             mediaBarTrailerPreview: localProfile.mediaBarTrailerPreview,
+            mediaBarSourceType: localProfile.mediaBarSourceType,
+            mediaBarCollectionIds: localProfile.mediaBarCollectionIds,
+            mediaBarShuffleItems: localProfile.mediaBarShuffleItems,
+            mediaBarLibraryIds: localProfile.mediaBarLibraryIds,
             showShuffleButton: localProfile.showShuffleButton,
             showGenresButton: localProfile.showGenresButton,
             showFavoritesButton: localProfile.showFavoritesButton,

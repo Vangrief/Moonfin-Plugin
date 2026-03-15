@@ -1,5 +1,9 @@
 using System.Net.Mime;
 using System.Text.Json;
+using Jellyfin.Data.Enums;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -18,6 +22,7 @@ public class MoonfinController : ControllerBase
 {
     private readonly MoonfinSettingsService _settingsService;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ILibraryManager _libraryManager;
     
     // Cache for auto-detected variant
     private static string? _cachedVariant;
@@ -25,10 +30,14 @@ public class MoonfinController : ControllerBase
     private static DateTime _variantCacheExpiry = DateTime.MinValue;
     private static readonly SemaphoreSlim _variantLock = new(1, 1);
 
-    public MoonfinController(MoonfinSettingsService settingsService, IHttpClientFactory httpClientFactory)
+    public MoonfinController(
+        MoonfinSettingsService settingsService,
+        IHttpClientFactory httpClientFactory,
+        ILibraryManager libraryManager)
     {
         _settingsService = settingsService;
         _httpClientFactory = httpClientFactory;
+        _libraryManager = libraryManager;
     }
 
     /// <summary>
@@ -415,6 +424,201 @@ public class MoonfinController : ControllerBase
         }
 
         return NotFound();
+    }
+
+    /// <summary>
+    /// Gets resolved media bar content for the current user.
+    /// Combines user settings resolution with server-side item queries so all clients
+    /// (web, Android, TV) get identical results from a single call.
+    /// </summary>
+    /// <param name="profile">Device profile name: desktop, mobile, tv, or global.</param>
+    /// <returns>Media bar items as Jellyfin BaseItemDto objects.</returns>
+    [HttpGet("MediaBar")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult> GetMediaBarItems(
+        [FromQuery] string profile = "global")
+    {
+        var userId = this.GetUserIdFromClaims();
+        if (userId == null)
+        {
+            return Unauthorized(new { Error = "User not authenticated" });
+        }
+
+        // Resolve settings: device profile → global → admin defaults
+        var resolved = await _settingsService.GetResolvedProfileAsync(userId.Value, profile);
+        var settings = resolved ?? MoonfinPlugin.Instance?.Configuration?.DefaultUserSettings ?? new MoonfinSettingsProfile();
+
+        var sourceType = settings.MediaBarSourceType ?? "library";
+        var limit = settings.MediaBarItemCount ?? 10;
+
+        List<BaseItem> items;
+
+        if (sourceType == "collection" && settings.MediaBarCollectionIds is { Count: > 0 })
+        {
+            items = GetCollectionItems(settings.MediaBarCollectionIds, limit);
+        }
+        else
+        {
+            items = GetLibraryItems(settings.MediaBarLibraryIds, limit);
+        }
+
+        var dtos = items.Select(MapItemToDto).ToList();
+
+        return Ok(new
+        {
+            Items = dtos,
+            TotalRecordCount = dtos.Count
+        });
+    }
+
+    /// <summary>
+    /// Maps a BaseItem to a lightweight DTO matching Jellyfin's BaseItemDto shape.
+    /// Uses only stable BaseItem properties to avoid version-specific API issues.
+    /// </summary>
+    private static object MapItemToDto(BaseItem item)
+    {
+        // Build image tags dict
+        var imageTags = new Dictionary<string, string>();
+        var imageInfo = item.GetImageInfo(ImageType.Primary, 0);
+        if (imageInfo != null)
+        {
+            imageTags["Primary"] = GetTag(imageInfo);
+        }
+        var logoInfo = item.GetImageInfo(ImageType.Logo, 0);
+        if (logoInfo != null)
+        {
+            imageTags["Logo"] = GetTag(logoInfo);
+        }
+
+        // Build backdrop tags array
+        var backdropTags = new List<string>();
+        var backdropImages = item.GetImages(ImageType.Backdrop).ToList();
+        foreach (var bd in backdropImages)
+        {
+            backdropTags.Add(GetTag(bd));
+        }
+
+        return new
+        {
+            item.Id,
+            item.Name,
+            Type = item.GetBaseItemKind().ToString(),
+            item.ProductionYear,
+            item.OfficialRating,
+            item.RunTimeTicks,
+            item.Genres,
+            item.Overview,
+            item.CommunityRating,
+            item.CriticRating,
+            ImageTags = imageTags,
+            BackdropImageTags = backdropTags
+        };
+    }
+
+    /// <summary>
+    /// Gets a stable tag string from an ItemImageInfo for cache-busting image URLs.
+    /// </summary>
+    private static string GetTag(ItemImageInfo info)
+    {
+        return info.DateModified.Ticks.ToString("X");
+    }
+
+    /// <summary>
+    /// Queries random Movie/Series items, optionally filtered to specific libraries.
+    /// </summary>
+    private List<BaseItem> GetLibraryItems(List<string>? libraryIds, int limit)
+    {
+        var query = new InternalItemsQuery
+        {
+            IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Series],
+            Limit = limit,
+            Recursive = true
+        };
+
+        // Set OrderBy = Random via reflection to avoid compile-time reference to
+        // SortOrder which moved assemblies between Jellyfin 10.10 and 10.11
+        SetRandomOrder(query);
+
+        if (libraryIds is { Count: > 0 })
+        {
+            var parsedIds = libraryIds
+                .Select(id => Guid.TryParse(id, out var g) ? g : Guid.Empty)
+                .Where(g => g != Guid.Empty)
+                .ToArray();
+
+            if (parsedIds.Length > 0)
+            {
+                query.TopParentIds = parsedIds;
+            }
+        }
+
+        return _libraryManager.GetItemsResult(query).Items.ToList();
+    }
+
+    /// <summary>
+    /// Sets OrderBy to Random on the query using reflection, avoiding direct
+    /// reference to SortOrder which moved between Jellyfin 10.10 and 10.11.
+    /// </summary>
+    private static void SetRandomOrder(InternalItemsQuery query)
+    {
+        try
+        {
+            // Find SortOrder enum type at runtime (works regardless of assembly)
+            var orderByProp = typeof(InternalItemsQuery).GetProperty(nameof(InternalItemsQuery.OrderBy));
+            if (orderByProp == null) return;
+
+            // Get the generic type args: (ItemSortBy, SortOrder)
+            var elementType = orderByProp.PropertyType.GetGenericArguments()[0];
+            var sortOrderType = elementType.GetGenericArguments()[1];
+            var ascending = Enum.ToObject(sortOrderType, 0);
+
+            // Create the tuple (ItemSortBy.Random, SortOrder.Ascending)
+            var tuple = Activator.CreateInstance(elementType, ItemSortBy.Random, ascending);
+            var array = Array.CreateInstance(elementType, 1);
+            array.SetValue(tuple, 0);
+
+            orderByProp.SetValue(query, array);
+        }
+        catch
+        {
+            // Reflection failed — query will return items in default order, still functional
+        }
+    }
+
+    /// <summary>
+    /// Queries items from specified collections/playlists, filtered to Movie/Series.
+    /// </summary>
+    private List<BaseItem> GetCollectionItems(List<string> collectionIds, int limit)
+    {
+        var allItems = new List<BaseItem>();
+        var seenIds = new HashSet<Guid>();
+
+        foreach (var colId in collectionIds)
+        {
+            if (!Guid.TryParse(colId, out var parentGuid)) continue;
+
+            // Get the collection/playlist as a Folder to access LinkedChildren
+            var parent = _libraryManager.GetItemById(parentGuid);
+            if (parent is not Folder folder) continue;
+
+            // Access LinkedChildren (data property, no method signature issues)
+            // then resolve each linked item individually via GetItemById (proven stable)
+            foreach (var linkedChild in folder.LinkedChildren)
+            {
+                if (!linkedChild.ItemId.HasValue) continue;
+                var item = _libraryManager.GetItemById(linkedChild.ItemId.Value);
+                if (item == null || !seenIds.Add(item.Id)) continue;
+
+                var kind = item.GetBaseItemKind();
+                if (kind != BaseItemKind.Movie && kind != BaseItemKind.Series) continue;
+
+                allItems.Add(item);
+            }
+        }
+
+        return allItems.Take(limit).ToList();
     }
 
     /// <summary>

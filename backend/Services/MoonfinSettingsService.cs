@@ -272,13 +272,17 @@ public class MoonfinSettingsService
         settings.EnableFolderView = null;
         settings.ConfirmExit = null;
         settings.MediaBarEnabled = null;
-        settings.MediaBarContentType = null;
+
         settings.MediaBarItemCount = null;
         settings.MediaBarOpacity = null;
         settings.MediaBarOverlayColor = null;
         settings.MediaBarAutoAdvance = null;
         settings.MediaBarIntervalMs = null;
         settings.MediaBarTrailerPreview = null;
+        settings.MediaBarSourceType = null;
+        settings.MediaBarCollectionIds = null;
+        settings.MediaBarShuffleItems = null;
+        settings.MediaBarLibraryIds = null;
         settings.SeasonalSurprise = null;
         settings.BackdropEnabled = null;
         settings.HomeRowsImageTypeOverride = null;

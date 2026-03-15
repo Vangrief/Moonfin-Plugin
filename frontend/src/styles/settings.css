@@ -634,3 +634,95 @@
         justify-content: flex-end;
     }
 }
+/* Collection / Playlist Picker */
+.moonfin-mediabar-library-options,
+.moonfin-mediabar-collection-options {
+    margin-bottom: 10px;
+}
+
+.moonfin-collection-picker {
+    max-height: 240px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+.moonfin-collection-picker::-webkit-scrollbar {
+    width: 4px;
+}
+
+.moonfin-collection-picker::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 2px;
+}
+
+.moonfin-collection-picker-loading {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.45);
+    padding: 12px 0;
+}
+
+.moonfin-collection-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    margin-bottom: 2px;
+}
+
+.moonfin-collection-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.moonfin-collection-item-active {
+    background: rgba(0, 164, 220, 0.1);
+}
+
+.moonfin-collection-item-active:hover {
+    background: rgba(0, 164, 220, 0.15);
+}
+
+.moonfin-collection-item input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    accent-color: #00a4dc;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.moonfin-collection-poster {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.moonfin-collection-poster-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.moonfin-collection-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.moonfin-collection-name {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.9);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.moonfin-collection-type {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 1px;
+}

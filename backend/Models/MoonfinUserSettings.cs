@@ -86,8 +86,7 @@ public class MoonfinUserSettings
     public bool? ConfirmExit { get; set; }
     [JsonPropertyName("mediaBarEnabled")]
     public bool? MediaBarEnabled { get; set; }
-    [JsonPropertyName("mediaBarContentType")]
-    public string? MediaBarContentType { get; set; }
+
     [JsonPropertyName("mediaBarItemCount")]
     public int? MediaBarItemCount { get; set; }
     [JsonPropertyName("mediaBarOpacity")]
@@ -100,6 +99,14 @@ public class MoonfinUserSettings
     public int? MediaBarIntervalMs { get; set; }
     [JsonPropertyName("mediaBarTrailerPreview")]
     public bool? MediaBarTrailerPreview { get; set; }
+    [JsonPropertyName("mediaBarSourceType")]
+    public string? MediaBarSourceType { get; set; }
+    [JsonPropertyName("mediaBarCollectionIds")]
+    public List<string>? MediaBarCollectionIds { get; set; }
+    [JsonPropertyName("mediaBarShuffleItems")]
+    public bool? MediaBarShuffleItems { get; set; }
+    [JsonPropertyName("mediaBarLibraryIds")]
+    public List<string>? MediaBarLibraryIds { get; set; }
     [JsonPropertyName("seasonalSurprise")]
     public string? SeasonalSurprise { get; set; }
     [JsonPropertyName("backdropEnabled")]

@@ -3,6 +3,8 @@ var Settings = {
     isOpen: false,
     _toastTimeout: null,
 
+    _esc: function(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; },
+
     show: function() {
         if (this.isOpen) return;
 
@@ -139,11 +141,34 @@ var Settings = {
             this.createToggleCard('detailsPageEnabled', 'Details Page', 'Use the custom Moonfin details page instead of the default Jellyfin one', settings.detailsPageEnabled);
 
         var mediaBarContent =
-            this.createSelectCard('mediaBarContentType', 'Content Type', 'What type of content to show in the media bar', [
-                { value: 'both', label: 'Movies & TV Shows' },
-                { value: 'movies', label: 'Movies Only' },
-                { value: 'tv', label: 'TV Shows Only' }
-            ], settings.mediaBarContentType) +
+            this.createSelectCard('mediaBarSourceType', 'Content Source', 'Where to pull media bar items from', [
+                { value: 'library', label: 'Library (Random)' },
+                { value: 'collection', label: 'Collections / Playlists' }
+            ], settings.mediaBarSourceType) +
+
+            '<div class="moonfin-mediabar-library-options" style="' + (settings.mediaBarSourceType === 'collection' ? 'display:none' : '') + '">' +
+                '<div class="moonfin-select-card">' +
+                    '<div class="moonfin-select-info">' +
+                        '<div class="moonfin-toggle-title">Libraries</div>' +
+                        '<div class="moonfin-toggle-desc">Optionally select which libraries to use. Leave all unchecked to use all libraries.</div>' +
+                    '</div>' +
+                    '<div class="moonfin-library-picker" id="moonfin-library-picker">' +
+                        '<div class="moonfin-collection-picker-loading">Loading...</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+            '<div class="moonfin-mediabar-collection-options" style="' + (settings.mediaBarSourceType === 'collection' ? '' : 'display:none') + '">' +
+                '<div class="moonfin-select-card">' +
+                    '<div class="moonfin-select-info">' +
+                        '<div class="moonfin-toggle-title">Collections / Playlists</div>' +
+                        '<div class="moonfin-toggle-desc">Select which collections or playlists to show in the media bar</div>' +
+                    '</div>' +
+                    '<div class="moonfin-collection-picker" id="moonfin-collection-picker">' +
+                        '<div class="moonfin-collection-picker-loading">Loading...</div>' +
+                    '</div>' +
+                '</div>' +
+                this.createToggleCard('mediaBarShuffleItems', 'Shuffle Items', 'Randomize the order of items from selected collections', settings.mediaBarShuffleItems !== false) +
+            '</div>' +
 
             this.createSelectCard('mediaBarItemCount', 'Number of Items', 'How many items to display', [
                 { value: '5', label: '5' },
@@ -443,6 +468,15 @@ var Settings = {
         var tmdbConfig = this.dialog.querySelector('.moonfin-tmdb-config');
         if (tmdbConfig) tmdbConfig.style.display = resolved.tmdbEpisodeRatingsEnabled ? '' : 'none';
 
+        // Toggle media bar source sub-sections
+        var isCollection = resolved.mediaBarSourceType === 'collection';
+        var libraryOpts = this.dialog.querySelector('.moonfin-mediabar-library-options');
+        var collectionOpts = this.dialog.querySelector('.moonfin-mediabar-collection-options');
+        if (libraryOpts) libraryOpts.style.display = isCollection ? 'none' : '';
+        if (collectionOpts) collectionOpts.style.display = isCollection ? '' : 'none';
+        if (isCollection) this.loadCollectionPicker();
+        if (!isCollection) this.loadLibraryPicker();
+
         // Update profile info text
         var infoText = this.dialog.querySelector('.moonfin-profile-info-text');
         if (infoText) {
@@ -678,6 +712,30 @@ var Settings = {
                 self.hide();
             }
         });
+
+        // Media bar source type toggle
+        var sourceTypeSelect = this.dialog.querySelector('select[name="mediaBarSourceType"]');
+        if (sourceTypeSelect) {
+            sourceTypeSelect.addEventListener('change', function() {
+                var isCollection = sourceTypeSelect.value === 'collection';
+                var libraryOpts = self.dialog.querySelector('.moonfin-mediabar-library-options');
+                var collectionOpts = self.dialog.querySelector('.moonfin-mediabar-collection-options');
+                if (libraryOpts) libraryOpts.style.display = isCollection ? 'none' : '';
+                if (collectionOpts) collectionOpts.style.display = isCollection ? '' : 'none';
+                if (isCollection) {
+                    self.loadCollectionPicker();
+                } else {
+                    self.loadLibraryPicker();
+                }
+            });
+
+            // Load pickers on init based on active source mode
+            if (sourceTypeSelect.value === 'collection') {
+                self.loadCollectionPicker();
+            } else {
+                self.loadLibraryPicker();
+            }
+        }
 
         // MDBList API key - save on input with debounce + on blur
         var mdblistApiKeyInput = this.dialog.querySelector('#moonfin-mdblistApiKey');
@@ -938,6 +996,156 @@ var Settings = {
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Sign In';
             }
+        });
+    },
+
+    loadCollectionPicker: function() {
+        var self = this;
+        var picker = this.dialog ? this.dialog.querySelector('#moonfin-collection-picker') : null;
+        if (!picker) return;
+
+        picker.innerHTML = '<div class="moonfin-collection-picker-loading">Loading...</div>';
+
+        API.getCollectionsAndPlaylists().then(function(items) {
+            if (!self.dialog) return;
+            if (!items || items.length === 0) {
+                picker.innerHTML = '<div class="moonfin-toggle-desc">No collections or playlists found on this server.</div>';
+                return;
+            }
+
+            var settings = Storage.getAll();
+            var selectedIds = settings.mediaBarCollectionIds || [];
+            var serverUrl = (window.ApiClient && window.ApiClient.serverAddress ? window.ApiClient.serverAddress() : '') || '';
+            var html = '';
+
+            for (var i = 0; i < items.length; i++) {
+                var item = items[i];
+                var isChecked = selectedIds.indexOf(item.Id) !== -1;
+                var typeBadge = item.Type === 'BoxSet' ? 'Collection' : 'Playlist';
+                var posterUrl = '';
+                if (item.ImageTags && item.ImageTags.Primary) {
+                    posterUrl = serverUrl + '/Items/' + item.Id + '/Images/Primary?maxWidth=60&quality=80&tag=' + item.ImageTags.Primary;
+                }
+
+                html +=
+                    '<label class="moonfin-collection-item' + (isChecked ? ' moonfin-collection-item-active' : '') + '">' +
+                        '<input type="checkbox" data-collection-id="' + item.Id + '"' + (isChecked ? ' checked' : '') + '>' +
+                        (posterUrl ?
+                            '<img class="moonfin-collection-poster" src="' + posterUrl + '" alt="">' :
+                            '<div class="moonfin-collection-poster moonfin-collection-poster-empty"></div>') +
+                        '<div class="moonfin-collection-info">' +
+                            '<div class="moonfin-collection-name">' + Settings._esc(item.Name || 'Untitled') + '</div>' +
+                            '<div class="moonfin-collection-type">' + typeBadge + '</div>' +
+                        '</div>' +
+                    '</label>';
+            }
+
+            picker.innerHTML = html;
+
+            // Event delegation for checkboxes
+            picker.addEventListener('change', function(e) {
+                var cb = e.target;
+                if (!cb.dataset.collectionId) return;
+
+                var currentIds = Storage.get('mediaBarCollectionIds') || [];
+                currentIds = currentIds.slice();
+                var id = cb.dataset.collectionId;
+                var idx = currentIds.indexOf(id);
+
+                if (cb.checked && idx === -1) {
+                    currentIds.push(id);
+                } else if (!cb.checked && idx !== -1) {
+                    currentIds.splice(idx, 1);
+                }
+
+                self.saveSetting('mediaBarCollectionIds', currentIds);
+
+                var label = cb.closest('.moonfin-collection-item');
+                if (label) label.classList.toggle('moonfin-collection-item-active', cb.checked);
+
+                self.showToast(cb.checked ? 'Added to media bar' : 'Removed from media bar');
+            });
+        }).catch(function(e) {
+            console.error('[Moonfin] Failed to load collection picker:', e);
+            picker.innerHTML = '<div class="moonfin-toggle-desc">Failed to load collections.</div>';
+        });
+    },
+
+    loadLibraryPicker: function() {
+        var self = this;
+        var picker = this.dialog ? this.dialog.querySelector('#moonfin-library-picker') : null;
+        if (!picker) return;
+
+        picker.innerHTML = '<div class="moonfin-collection-picker-loading">Loading...</div>';
+
+        API.getUserViews().then(function(views) {
+            if (!self.dialog) return;
+
+            // Filter to media libraries (Movies, TV Shows, Music, etc.)
+            var libraries = [];
+            for (var i = 0; i < views.length; i++) {
+                var ct = views[i].CollectionType;
+                if (ct === 'movies' || ct === 'tvshows' || ct === 'music' || ct === 'mixed') {
+                    libraries.push(views[i]);
+                }
+            }
+
+            if (libraries.length === 0) {
+                picker.innerHTML = '<div class="moonfin-toggle-desc">No media libraries found.</div>';
+                return;
+            }
+
+            var settings = Storage.getAll();
+            var selectedIds = settings.mediaBarLibraryIds || [];
+            var html = '';
+
+            for (var j = 0; j < libraries.length; j++) {
+                var lib = libraries[j];
+                var isChecked = selectedIds.indexOf(lib.Id) !== -1;
+                var typeBadge = (lib.CollectionType || 'library').charAt(0).toUpperCase() +
+                    (lib.CollectionType || 'library').slice(1);
+
+                html +=
+                    '<label class="moonfin-collection-item' + (isChecked ? ' moonfin-collection-item-active' : '') + '">' +
+                        '<input type="checkbox" data-library-id="' + lib.Id + '"' + (isChecked ? ' checked' : '') + '>' +
+                        '<div class="moonfin-collection-poster moonfin-collection-poster-empty" style="display:flex;align-items:center;justify-content:center;font-size:16px;">' +
+                            (lib.CollectionType === 'movies' ? '🎬' : lib.CollectionType === 'tvshows' ? '📺' : lib.CollectionType === 'music' ? '🎵' : '📁') +
+                        '</div>' +
+                        '<div class="moonfin-collection-info">' +
+                            '<div class="moonfin-collection-name">' + Settings._esc(lib.Name || 'Untitled') + '</div>' +
+                            '<div class="moonfin-collection-type">' + typeBadge + '</div>' +
+                        '</div>' +
+                    '</label>';
+            }
+
+            picker.innerHTML = html;
+
+            // Event delegation for library checkboxes
+            picker.addEventListener('change', function(e) {
+                var cb = e.target;
+                if (!cb.dataset.libraryId) return;
+
+                var currentIds = Storage.get('mediaBarLibraryIds') || [];
+                currentIds = currentIds.slice();
+                var id = cb.dataset.libraryId;
+                var idx = currentIds.indexOf(id);
+
+                if (cb.checked && idx === -1) {
+                    currentIds.push(id);
+                } else if (!cb.checked && idx !== -1) {
+                    currentIds.splice(idx, 1);
+                }
+
+                self.saveSetting('mediaBarLibraryIds', currentIds);
+
+                var label = cb.closest('.moonfin-collection-item');
+                if (label) label.classList.toggle('moonfin-collection-item-active', cb.checked);
+
+                self.showToast(cb.checked ? 'Library added' : 'Library removed');
+            });
+        }).catch(function(e) {
+            console.error('[Moonfin] Failed to load library picker:', e);
+            picker.innerHTML = '<div class="moonfin-toggle-desc">Failed to load libraries.</div>';
         });
     }
 };

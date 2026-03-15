@@ -136,6 +136,36 @@
                             </label>
                             <div class="fieldDescription">Enable the featured media carousel on the home page by default.</div>
                         </div>
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="DefaultMediaBarSourceType">Media Bar Content Source</label>
+                            <select id="DefaultMediaBarSourceType" is="emby-select">
+                                <option value="">Not set (user decides)</option>
+                                <option value="library">Library (Random)</option>
+                                <option value="collection">Collections / Playlists</option>
+                            </select>
+                            <div class="fieldDescription">Default content source for the media bar. Users can override this.</div>
+                        </div>
+                        <div id="DefaultCollectionPickerSection" style="display:none;">
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused">Default Collections / Playlists</label>
+                                <div class="fieldDescription" style="margin-bottom:0.5em;">Select which collections or playlists to show in the media bar by default. Users can override this in their own settings. Note: users who don't have access to a selected collection will simply not see those items.</div>
+                                <div id="DefaultCollectionPicker" style="max-height:200px;overflow-y:auto;border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:4px;"></div>
+                            </div>
+                        </div>
+                        <div id="DefaultLibraryPickerSection" style="display:none;">
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused">Default Libraries</label>
+                                <div class="fieldDescription" style="margin-bottom:0.5em;">Optionally select specific libraries for the media bar. Leave all unchecked to use all libraries. Users can override this.</div>
+                                <div id="DefaultLibraryPicker" style="max-height:200px;overflow-y:auto;border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:4px;"></div>
+                            </div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input type="checkbox" id="DefaultMediaBarShuffleItems" is="emby-checkbox" />
+                                <span>Shuffle Media Bar Items</span>
+                            </label>
+                            <div class="fieldDescription">Randomize the order of items from collections/playlists by default.</div>
+                        </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
                                 <input type="checkbox" id="DefaultDetailsPageEnabled" is="emby-checkbox" />
@@ -238,6 +268,8 @@
         </div>
 
         <script type="text/javascript">
+            function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
             var MoonfinConfig = {
                 pluginUniqueId: '8c5d0e91-4f2a-4b6d-9e3f-1a7c8d9e0f2b'
             };
@@ -260,6 +292,8 @@
                     document.querySelector('#DefaultNavbarEnabled').checked = !!defaults.navbarEnabled;
                     document.querySelector('#DefaultNavbarPosition').value = defaults.navbarPosition || '';
                     document.querySelector('#DefaultMediaBarEnabled').checked = !!defaults.mediaBarEnabled;
+                    document.querySelector('#DefaultMediaBarSourceType').value = defaults.mediaBarSourceType || '';
+                    document.querySelector('#DefaultMediaBarShuffleItems').checked = defaults.mediaBarShuffleItems !== false;
                     document.querySelector('#DefaultDetailsPageEnabled').checked = !!defaults.detailsPageEnabled;
                     document.querySelector('#DefaultShowClock').checked = !!defaults.showClock;
                     document.querySelector('#DefaultShowShuffleButton').checked = !!defaults.showShuffleButton;
@@ -271,8 +305,99 @@
                     document.querySelector('#DefaultMdblistEnabled').checked = !!defaults.mdblistEnabled;
                     document.querySelector('#DefaultTmdbEpisodeRatingsEnabled').checked = !!defaults.tmdbEpisodeRatingsEnabled;
 
+                    // Collection/Library picker visibility and loading
+                    var sourceSelect = document.querySelector('#DefaultMediaBarSourceType');
+                    var collectionPickerSection = document.querySelector('#DefaultCollectionPickerSection');
+                    var libraryPickerSection = document.querySelector('#DefaultLibraryPickerSection');
+                    function togglePickerVisibility() {
+                        var isCollection = sourceSelect.value === 'collection';
+                        var isLibrary = sourceSelect.value === 'library';
+                        collectionPickerSection.style.display = isCollection ? '' : 'none';
+                        libraryPickerSection.style.display = isLibrary ? '' : 'none';
+                        if (isCollection) {
+                            loadAdminCollectionPicker(defaults.mediaBarCollectionIds || []);
+                        }
+                        if (isLibrary) {
+                            loadAdminLibraryPicker(defaults.mediaBarLibraryIds || []);
+                        }
+                    }
+                    sourceSelect.addEventListener('change', togglePickerVisibility);
+                    togglePickerVisibility();
+
                     Dashboard.hideLoadingMsg();
                 });
+
+                function loadAdminCollectionPicker(selectedIds) {
+                    var picker = document.querySelector('#DefaultCollectionPicker');
+                    if (!picker) return;
+                    picker.innerHTML = '<div style="padding:8px;color:rgba(255,255,255,0.5);font-size:0.9em;">Loading...</div>';
+
+                    var userId = ApiClient.getCurrentUserId();
+                    ApiClient.getItems(userId, {
+                        userId: userId,
+                        includeItemTypes: 'BoxSet,Playlist',
+                        sortBy: 'SortName',
+                        sortOrder: 'Ascending',
+                        recursive: true,
+                        fields: 'PrimaryImageAspectRatio',
+                        imageTypeLimit: 1,
+                        enableImageTypes: 'Primary'
+                    }).then(function(result) {
+                        var items = result.Items || [];
+                        if (items.length === 0) {
+                            picker.innerHTML = '<div style="padding:8px;color:rgba(255,255,255,0.5);font-size:0.9em;">No collections or playlists found.</div>';
+                            return;
+                        }
+                        var html = '';
+                        var serverUrl = ApiClient.serverAddress ? ApiClient.serverAddress() : '';
+                        for (var i = 0; i < items.length; i++) {
+                            var item = items[i];
+                            var isChecked = selectedIds.indexOf(item.Id) !== -1;
+                            var typeBadge = item.Type === 'BoxSet' ? 'Collection' : 'Playlist';
+                            var posterUrl = '';
+                            if (item.ImageTags && item.ImageTags.Primary) {
+                                posterUrl = serverUrl + '/Items/' + item.Id + '/Images/Primary?maxWidth=40&quality=80&tag=' + item.ImageTags.Primary;
+                            }
+                            html += '<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;cursor:pointer;' + (isChecked ? 'background:rgba(0,164,220,0.1);' : '') + '">' +
+                                '<input type="checkbox" class="adminCollectionCb" data-id="' + item.Id + '"' + (isChecked ? ' checked' : '') + ' style="accent-color:#00a4dc;width:16px;height:16px;">' +
+                                (posterUrl ? '<img src="' + posterUrl + '" style="width:32px;height:32px;border-radius:3px;object-fit:cover;">' : '<div style="width:32px;height:32px;border-radius:3px;background:rgba(255,255,255,0.08);"></div>') +
+                                '<div style="flex:1;min-width:0;"><div style="font-size:0.9em;color:rgba(255,255,255,0.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(item.Name || 'Untitled') + '</div>' +
+                                '<div style="font-size:0.78em;color:rgba(255,255,255,0.4);">' + typeBadge + '</div></div></label>';
+                        }
+                        picker.innerHTML = html;
+                    });
+                }
+
+                function loadAdminLibraryPicker(selectedIds) {
+                    var picker = document.querySelector('#DefaultLibraryPicker');
+                    if (!picker) return;
+                    picker.innerHTML = '<div style="padding:8px;color:rgba(255,255,255,0.5);font-size:0.9em;">Loading...</div>';
+
+                    var userId = ApiClient.getCurrentUserId();
+                    ApiClient.getUserViews(userId).then(function(result) {
+                        var items = (result.Items || []).filter(function(item) {
+                            var ct = item.CollectionType;
+                            return ct === 'movies' || ct === 'tvshows' || ct === 'music' || ct === 'mixed';
+                        });
+                        if (items.length === 0) {
+                            picker.innerHTML = '<div style="padding:8px;color:rgba(255,255,255,0.5);font-size:0.9em;">No media libraries found.</div>';
+                            return;
+                        }
+                        var html = '';
+                        for (var i = 0; i < items.length; i++) {
+                            var item = items[i];
+                            var isChecked = selectedIds.indexOf(item.Id) !== -1;
+                            var typeBadge = (item.CollectionType || 'library').charAt(0).toUpperCase() + (item.CollectionType || 'library').slice(1);
+                            var emoji = item.CollectionType === 'movies' ? '🎬' : item.CollectionType === 'tvshows' ? '📺' : item.CollectionType === 'music' ? '🎵' : '📁';
+                            html += '<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;cursor:pointer;' + (isChecked ? 'background:rgba(0,164,220,0.1);' : '') + '">' +
+                                '<input type="checkbox" class="adminLibraryCb" data-id="' + item.Id + '"' + (isChecked ? ' checked' : '') + ' style="accent-color:#00a4dc;width:16px;height:16px;">' +
+                                '<span style="font-size:18px;">' + emoji + '</span>' +
+                                '<div style="flex:1;min-width:0;"><div style="font-size:0.9em;color:rgba(255,255,255,0.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(item.Name || 'Untitled') + '</div>' +
+                                '<div style="font-size:0.78em;color:rgba(255,255,255,0.4);">' + typeBadge + '</div></div></label>';
+                        }
+                        picker.innerHTML = html;
+                    });
+                }
 
                 document.querySelector('#MoonfinConfigForm')
                     .addEventListener('submit', function(ev) {
@@ -292,6 +417,22 @@
                             config.DefaultUserSettings.navbarEnabled = document.querySelector('#DefaultNavbarEnabled').checked;
                             config.DefaultUserSettings.navbarPosition = document.querySelector('#DefaultNavbarPosition').value || null;
                             config.DefaultUserSettings.mediaBarEnabled = document.querySelector('#DefaultMediaBarEnabled').checked;
+                            config.DefaultUserSettings.mediaBarSourceType = document.querySelector('#DefaultMediaBarSourceType').value || null;
+                            config.DefaultUserSettings.mediaBarShuffleItems = document.querySelector('#DefaultMediaBarShuffleItems').checked;
+                            // Collect selected collection IDs
+                            var collectionCbs = document.querySelectorAll('.adminCollectionCb:checked');
+                            var collectionIds = [];
+                            for (var ci = 0; ci < collectionCbs.length; ci++) {
+                                collectionIds.push(collectionCbs[ci].dataset.id);
+                            }
+                            config.DefaultUserSettings.mediaBarCollectionIds = collectionIds.length > 0 ? collectionIds : null;
+                            // Collect selected library IDs
+                            var libraryCbs = document.querySelectorAll('.adminLibraryCb:checked');
+                            var libraryIds = [];
+                            for (var li = 0; li < libraryCbs.length; li++) {
+                                libraryIds.push(libraryCbs[li].dataset.id);
+                            }
+                            config.DefaultUserSettings.mediaBarLibraryIds = libraryIds.length > 0 ? libraryIds : null;
                             config.DefaultUserSettings.detailsPageEnabled = document.querySelector('#DefaultDetailsPageEnabled').checked;
                             config.DefaultUserSettings.showClock = document.querySelector('#DefaultShowClock').checked;
                             config.DefaultUserSettings.showShuffleButton = document.querySelector('#DefaultShowShuffleButton').checked;

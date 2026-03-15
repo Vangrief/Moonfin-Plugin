@@ -42,28 +42,46 @@ const API = {
         }
     },
 
+    async getMediaBarItems(profile) {
+        const api = this.getApiClient();
+        if (!api) return null;
+
+        try {
+            const serverUrl = api.serverAddress?.() || '';
+            const token = api.accessToken?.();
+            const headers = token ? { Authorization: 'MediaBrowser Token="' + token + '"' } : {};
+
+            const profileParam = profile || 'global';
+            const response = await fetch(
+                serverUrl + '/Moonfin/MediaBar?profile=' + encodeURIComponent(profileParam),
+                { method: 'GET', headers: headers }
+            );
+
+            if (response.ok) {
+                const data = await response.json();
+                return data.Items || data.items || [];
+            }
+
+            return null;
+        } catch (e) {
+            console.warn('[Moonfin] MediaBar endpoint not available, falling back:', e);
+            return null;
+        }
+    },
+
     async getRandomItems(options = {}) {
         const api = this.getApiClient();
         if (!api) return [];
 
-        const { contentType = 'both', limit = 10 } = options;
+        const { limit = 10, libraryIds = [] } = options;
 
         try {
             const userId = api.getCurrentUserId();
-            
-            let includeItemTypes = [];
-            if (contentType === 'movies' || contentType === 'both') {
-                includeItemTypes.push('Movie');
-            }
-            if (contentType === 'tv' || contentType === 'both') {
-                includeItemTypes.push('Series');
-            }
 
-            const params = {
+            const baseParams = {
                 userId: userId,
-                includeItemTypes: includeItemTypes.join(','),
+                includeItemTypes: 'Movie,Series',
                 sortBy: 'Random',
-                limit: limit,
                 recursive: true,
                 hasThemeSong: false,
                 hasThemeVideo: false,
@@ -72,10 +90,114 @@ const API = {
                 enableImageTypes: 'Backdrop,Logo,Primary'
             };
 
-            const result = await api.getItems(userId, params);
+            // When specific libraries are selected, query each and merge
+            if (libraryIds && libraryIds.length > 0) {
+                var allItems = [];
+                var seenIds = {};
+
+                for (var i = 0; i < libraryIds.length; i++) {
+                    var params = Object.assign({}, baseParams, {
+                        parentId: libraryIds[i],
+                        limit: limit
+                    });
+                    var libResult = await api.getItems(userId, params);
+                    var items = libResult.Items || [];
+                    for (var j = 0; j < items.length; j++) {
+                        if (!seenIds[items[j].Id]) {
+                            seenIds[items[j].Id] = true;
+                            allItems.push(items[j]);
+                        }
+                    }
+                }
+
+                // Shuffle the merged results
+                for (var k = allItems.length - 1; k > 0; k--) {
+                    var r = Math.floor(Math.random() * (k + 1));
+                    var temp = allItems[k];
+                    allItems[k] = allItems[r];
+                    allItems[r] = temp;
+                }
+
+                return allItems.slice(0, limit);
+            }
+
+            // Default: all libraries
+            baseParams.limit = limit;
+            const result = await api.getItems(userId, baseParams);
             return result.Items || [];
         } catch (e) {
             console.error('[Moonfin] Failed to get random items:', e);
+            return [];
+        }
+    },
+
+    async getCollectionsAndPlaylists() {
+        const api = this.getApiClient();
+        if (!api) return [];
+
+        try {
+            const userId = api.getCurrentUserId();
+            const result = await api.getItems(userId, {
+                userId: userId,
+                includeItemTypes: 'BoxSet,Playlist',
+                sortBy: 'SortName',
+                sortOrder: 'Ascending',
+                recursive: true,
+                fields: 'PrimaryImageAspectRatio',
+                imageTypeLimit: 1,
+                enableImageTypes: 'Primary'
+            });
+            return result.Items || [];
+        } catch (e) {
+            console.error('[Moonfin] Failed to get collections/playlists:', e);
+            return [];
+        }
+    },
+
+    async getCollectionItems(collectionIds, options = {}) {
+        const api = this.getApiClient();
+        if (!api || !collectionIds || collectionIds.length === 0) return [];
+
+        const { limit = 10, shuffle = true } = options;
+
+        try {
+            const userId = api.getCurrentUserId();
+            const allItems = [];
+            const seenIds = {};
+
+            for (var i = 0; i < collectionIds.length; i++) {
+                const result = await api.getItems(userId, {
+                    userId: userId,
+                    parentId: collectionIds[i],
+                    sortBy: shuffle ? 'Random' : 'SortName',
+                    recursive: true,
+                    fields: 'Overview,Genres,CommunityRating,CriticRating,OfficialRating,RunTimeTicks,ProductionYear,ProviderIds',
+                    imageTypeLimit: 1,
+                    enableImageTypes: 'Backdrop,Logo,Primary'
+                });
+
+                var items = result.Items || [];
+                for (var j = 0; j < items.length; j++) {
+                    if (!seenIds[items[j].Id]) {
+                        seenIds[items[j].Id] = true;
+                        allItems.push(items[j]);
+                    }
+                }
+            }
+
+            // Shuffle merged results if requested
+            if (shuffle) {
+                for (var k = allItems.length - 1; k > 0; k--) {
+                    var r = Math.floor(Math.random() * (k + 1));
+                    var temp = allItems[k];
+                    allItems[k] = allItems[r];
+                    allItems[r] = temp;
+                }
+            }
+
+            return allItems.slice(0, limit);
+        } catch (e) {
+            console.error('[Moonfin] Failed to get collection items:', e);
             return [];
         }
     },
