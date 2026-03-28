@@ -31,8 +31,10 @@ var Library = {
         document.body.appendChild(this.container);
     },
 
-    show: function(libraryId, libraryName, collectionType) {
+    show: function(libraryId, libraryName, collectionType, options) {
         if (!this.container) this.createContainer();
+
+        options = options || {};
 
         this.libraryId = libraryId;
         this.libraryName = libraryName || 'Library';
@@ -40,13 +42,15 @@ var Library = {
         this.items = [];
         this.totalCount = 0;
         this.startIndex = 0;
-        this.sortBy = 'SortName';
-        this.sortOrder = 'Ascending';
+        this.sortBy = options.sortBy || 'SortName';
+        this.sortOrder = options.sortOrder || 'Ascending';
         this.startLetter = null;
         this.loading = false;
 
         // Determine default filter based on collection type
-        if (this.collectionType === 'movies') {
+        if (options.filterType) {
+            this.filterType = options.filterType;
+        } else if (this.collectionType === 'movies') {
             this.filterType = 'Movie';
         } else if (this.collectionType === 'tvshows') {
             this.filterType = 'Series';
@@ -91,6 +95,8 @@ var Library = {
                 includeItemTypes = 'Movie';
             } else if (this.collectionType === 'tvshows') {
                 includeItemTypes = 'Series';
+            } else if (this.collectionType === 'collection') {
+                includeItemTypes = 'Movie,Series';
             } else {
                 includeItemTypes = 'Movie,Series';
             }
@@ -224,8 +230,25 @@ var Library = {
             itemCards[i].addEventListener('click', function() {
                 var itemId = this.dataset.itemId;
                 if (itemId) {
-                    if (typeof Details !== 'undefined' && Storage.get('detailsPageEnabled')) {
-                        Details.showDetails(itemId);
+                    var selectedItem = null;
+                    for (var idx = 0; idx < self.items.length; idx++) {
+                        if (self.items[idx].Id === itemId) {
+                            selectedItem = self.items[idx];
+                            break;
+                        }
+                    }
+
+                    var type = selectedItem && selectedItem.Type ? selectedItem.Type : null;
+                    var supportsMoonfinDetails = type === 'Movie' || type === 'Series' || type === 'Episode' || type === 'Season' || type === 'Person';
+
+                    if (type === 'BoxSet' || type === 'Playlist') {
+                        self.show(itemId, selectedItem.Name || 'Collection', 'collection', {
+                            sortBy: 'PremiereDate,SortName',
+                            sortOrder: 'Ascending',
+                            filterType: 'all'
+                        });
+                    } else if (supportsMoonfinDetails && typeof Details !== 'undefined' && Storage.get('detailsPageEnabled')) {
+                        Details.showDetails(itemId, type);
                     } else {
                         API.navigateToItem(itemId);
                         self.close();
