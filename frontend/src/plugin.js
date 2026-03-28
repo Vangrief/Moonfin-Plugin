@@ -1437,6 +1437,7 @@ const Plugin = {
         TVNavigation,
         Device,
         Storage,
+        Settings,
         Navbar,
         MediaBar,
         Jellyseerr,

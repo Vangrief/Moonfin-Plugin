@@ -17,6 +17,15 @@ All user preferences sync across devices through the plugin's server-side API, s
 
 Moonfin requires the [File Transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) plugin to inject its web UI into Jellyfin's pages.
 
+## Enabling the UI
+
+All Moonfin features are **disabled by default** after installation. To activate them:
+
+1. Click the **Moonfin icon** in the header bar (next to SyncPlay) or open the **☰ hamburger menu** and select **Moonfin**
+2. Enable the features you want — **Navbar**, **Details Page**, **Media Bar**, etc.
+
+> **Tip for admins:** You can pre-enable features for all users from *Dashboard → Plugins → Moonfin* by setting **Default User Settings**. Users who haven't customized a setting will inherit the admin default, so new users get the full UI out of the box.
+
 ## Features
 
 ### Web UI (`frontend/`)
@@ -98,16 +107,6 @@ Moonfin uses the [File Transformation](https://github.com/IAmParadox27/jellyfin-
 
 > **UI not loading?** Go to *Dashboard → Scheduled Tasks* and run the **Moonfin Startup** task once, then refresh your browser.
 
-### Enabling the UI
-
-All Moonfin features are **disabled by default** after installation. To activate them:
-
-1. Click the **☰ hamburger menu** (top-left corner)
-2. Select **Moonfin** to open the settings panel
-3. Enable the features you want — **Navbar**, **Details Page**, **Media Bar**, etc.
-
-> **Tip for admins:** You can pre-enable features for all users from *Dashboard → Plugins → Moonfin* by setting **Default User Settings**. Users who haven't customized a setting will inherit the admin default, so new users get the full UI out of the box.
-
 ## Configuration
 
 ### Admin Settings
@@ -120,7 +119,7 @@ Jellyfin Dashboard → Administration → Plugins → **Moonfin** to configure:
 
 # User Settings
 
-Once the web UI is loaded, click your **user avatar** in the top right to open the Settings panel and click Moonfin. From there you can customize the navbar, media bar, details screen, seasonal effects, ratings, and more.
+Click the **Moonfin icon** in the header bar or open the **☰ hamburger menu → Moonfin** to open the settings panel. From there you can customize the navbar, media bar, details screen, seasonal effects, ratings, and more.
 
 Settings support **device profiles**: a shared global profile plus optional overrides for desktop, mobile, and TV. Device profiles only store values that differ from global, so changes to global automatically flow to all devices unless explicitly overridden. A sync toggle lets you enable or disable server synchronization per-user.
 

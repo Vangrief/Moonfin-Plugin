@@ -62,27 +62,23 @@ public class MoonfinWebController : ControllerBase
     }
 
     /// <summary>
-    /// Returns a small loader script that can be injected into index.html.
-    /// This script loads the main plugin files.
+    /// Serves the Moonfin loader script.
     /// </summary>
-    /// <returns>A JavaScript loader snippet.</returns>
+    /// <returns>The loader.js file.</returns>
     [HttpGet("loader.js")]
     [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public ContentResult GetLoaderJs()
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public IActionResult GetLoaderJs()
     {
-        var loaderScript = @"
-(function() {
-    var link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = '/Moonfin/Web/plugin.css';
-    document.head.appendChild(link);
+        var resourceName = "Moonfin.Server.Web.loader.js";
+        var stream = _assembly.GetManifestResourceStream(resourceName);
 
-    var script = document.createElement('script');
-    script.src = '/Moonfin/Web/plugin.js';
-    document.head.appendChild(script);
-})();
-";
-        return Content(loaderScript, "application/javascript");
+        if (stream == null)
+        {
+            return NotFound(new { Error = "loader.js not found" });
+        }
+
+        return File(stream, "application/javascript");
     }
 }
