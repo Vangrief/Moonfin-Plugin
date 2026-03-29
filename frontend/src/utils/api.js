@@ -299,21 +299,30 @@ const API = {
         if (!api) return { Items: [], TotalRecordCount: 0 };
 
         try {
+            options = options || {};
             var userId = api.getCurrentUserId();
             var params = {
                 userId: userId,
                 parentId: parentId,
-                includeItemTypes: options.includeItemTypes || 'Movie,Series',
                 sortBy: options.sortBy || 'SortName',
                 sortOrder: options.sortOrder || 'Ascending',
-                recursive: true,
+                recursive: options.recursive !== false,
                 startIndex: options.startIndex || 0,
                 limit: options.limit || 100,
                 enableTotalRecordCount: true,
-                fields: 'PrimaryImageAspectRatio,ProductionYear,CommunityRating,OfficialRating,RunTimeTicks,Overview,Genres',
+                fields: options.fields || 'PrimaryImageAspectRatio,ProductionYear,CommunityRating,OfficialRating,RunTimeTicks,Overview,Genres',
                 imageTypeLimit: 1,
                 enableImageTypes: 'Primary,Backdrop'
             };
+            if (options.includeItemTypes) {
+                params.includeItemTypes = options.includeItemTypes;
+            }
+            if (options.excludeItemTypes) {
+                params.excludeItemTypes = options.excludeItemTypes;
+            }
+            if (options.filters) {
+                params.filters = options.filters;
+            }
             if (options.nameStartsWith) {
                 params.nameStartsWith = options.nameStartsWith;
             }

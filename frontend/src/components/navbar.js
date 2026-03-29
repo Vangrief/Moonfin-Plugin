@@ -179,12 +179,7 @@ const Navbar = {
         var librariesList = this.container.querySelector('.moonfin-libraries-list');
         if (!librariesList) return;
 
-        var filteredLibraries = this.libraries.filter(function(lib) {
-            var type = lib.CollectionType ? lib.CollectionType.toLowerCase() : '';
-            return type !== 'playlists' && type !== 'boxsets';
-        });
-
-        librariesList.innerHTML = filteredLibraries.map(function(lib) {
+        librariesList.innerHTML = this.libraries.map(function(lib) {
             var collectionType = lib.CollectionType || '';
             return '<button class="moonfin-nav-btn moonfin-library-btn" data-action="library" data-library-id="' + lib.Id + '" data-collection-type="' + collectionType + '" title="' + lib.Name + '">' +
                 '<span class="moonfin-library-name">' + lib.Name + '</span>' +
@@ -444,7 +439,7 @@ const Navbar = {
                 var libraryName = btn.getAttribute('title');
                 if (libraryId) {
                     var type = (collectionType || '').toLowerCase();
-                    if (type === 'movies' || type === 'tvshows' || type === '') {
+                    if (type !== 'livetv') {
                         Library.show(libraryId, libraryName, collectionType);
                     } else {
                         API.navigateTo(this.getLibraryUrl(libraryId, collectionType));
