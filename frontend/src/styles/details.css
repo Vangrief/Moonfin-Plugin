@@ -1520,6 +1520,107 @@ body.moonfin-navbar-active .moonfin-details-back {
     animation: moonfin-fade-in 0.2s ease;
 }
 
+.moonfin-trailer-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10004;
+    background: rgba(0, 0, 0, 0.82);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    animation: moonfin-fade-in 0.2s ease;
+}
+
+.moonfin-trailer-modal {
+    position: relative;
+    width: min(1360px, 97vw);
+    height: min(780px, 88vh);
+    background: #000;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 20px 56px rgba(0, 0, 0, 0.65);
+    overflow: hidden;
+}
+
+.moonfin-trailer-player-host {
+    width: 100%;
+    height: 100%;
+    background: #000;
+}
+
+.moonfin-trailer-iframe {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: #000;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.moonfin-trailer-iframe.visible {
+    opacity: 1;
+}
+
+.moonfin-trailer-loading {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    color: rgba(255, 255, 255, 0.86);
+    font-size: 16px;
+}
+
+.moonfin-trailer-close {
+    position: absolute;
+    top: 36px;
+    right: 12px;
+    width: 40px;
+    height: 40px;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 2;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.moonfin-trailer-close svg {
+    width: 20px;
+    height: 20px;
+}
+
+.moonfin-trailer-close:hover,
+.moonfin-trailer-close:focus {
+    background: rgba(0, 0, 0, 0.8);
+    border-color: rgba(0, 164, 220, 0.75);
+    outline: none;
+}
+
+@media (max-width: 900px) {
+    .moonfin-trailer-overlay {
+        padding: 16px;
+    }
+
+    .moonfin-trailer-modal {
+        width: 98vw;
+        height: min(66vw, 82vh);
+        min-height: 280px;
+    }
+}
+
 @keyframes moonfin-fade-in {
     from { opacity: 0; }
     to { opacity: 1; }

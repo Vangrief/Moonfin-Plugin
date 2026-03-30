@@ -2,6 +2,10 @@ var Details = {
     container: null,
     currentItem: null,
     isVisible: false,
+    _trailerOverlay: null,
+    _trailerEscHandler: null,
+    _trailerPreviousFocus: null,
+    _trailerPlayer: null,
 
     init: function() {
         console.log('[Moonfin] Details: Initializing...');
@@ -132,6 +136,9 @@ var Details = {
             if (self.isVisible && (e.key === 'Escape' || e.keyCode === 27 || e.keyCode === 461 || e.keyCode === 10009)) {
                 e.preventDefault();
                 e.stopPropagation();
+                if (self.closeTrailerOverlay()) {
+                    return;
+                }
                 self.hide();
             }
         }, true);
@@ -182,6 +189,7 @@ var Details = {
     showDetails: function(itemId, itemType) {
         var self = this;
         console.log('[Moonfin] Details: Loading item', itemId, itemType);
+        this.closeTrailerOverlay();
 
         var api = API.getApiClient();
         if (!api) {
@@ -1093,42 +1101,237 @@ var Details = {
 
     playTrailer: function(item) {
         var self = this;
-        var api = API.getApiClient();
+        this.resolveTrailerSource(item).then(function(source) {
+            if (!source) {
+                self.playLocalTrailer(item);
+                return;
+            }
+            self.openTrailerOverlay(source, item.Name || 'Trailer');
+        }).catch(function(err) {
+            console.error('[Moonfin] Details: Failed to open trailer', err);
+            self.playLocalTrailer(item);
+        });
+    },
 
-        // Try local trailers first
-        if (item.LocalTrailerCount > 0) {
-            var userId = api.getCurrentUserId();
-            var serverUrl = this.getServerUrl();
-            var headers = this.getAuthHeaders();
+    resolveTrailerSource: function(item) {
+        var self = this;
+        var existingUrl = this.getFirstTrailerUrl(item.RemoteTrailers);
+        if (existingUrl) return Promise.resolve(this.buildTrailerSource(existingUrl));
 
-            fetch(serverUrl + '/Users/' + userId + '/Items/' + item.Id + '/LocalTrailers', {
-                headers: headers
-            }).then(function(resp) {
-                return resp.json();
-            }).then(function(trailers) {
-                if (trailers && trailers.length > 0) {
-                    self.hide(true);
-                    self.playItem(trailers[0].Id, 0);
-                }
-            }).catch(function(err) {
-                console.error('[Moonfin] Details: Failed to load local trailers', err);
-                // Fall back to remote trailers
-                self.openRemoteTrailer(item);
+        return API.getItemTrailers(item.Id).then(function(trailers) {
+            item.RemoteTrailers = trailers || [];
+            var url = self.getFirstTrailerUrl(item.RemoteTrailers);
+            return url ? self.buildTrailerSource(url) : null;
+        }).catch(function() {
+            return null;
+        });
+    },
+
+    buildTrailerSource: function(url) {
+        var videoId = this.extractYouTubeIdFromUrl(url);
+        if (videoId) {
+            return { type: 'youtube', videoId: videoId };
+        }
+        return { type: 'iframe', url: url };
+    },
+
+    getFirstTrailerUrl: function(trailers) {
+        if (!trailers || !trailers.length) return null;
+        for (var i = 0; i < trailers.length; i++) {
+            var trailer = trailers[i] || {};
+            var url = trailer.Url || trailer.url;
+            if (url) return url;
+        }
+        return null;
+    },
+
+    extractYouTubeIdFromUrl: function(url) {
+        if (!url) return null;
+        var match = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+        return match ? match[1] : null;
+    },
+
+    openTrailerOverlay: function(source, title) {
+        var self = this;
+        this.closeTrailerOverlay();
+
+        var overlay = document.createElement('div');
+        overlay.className = 'moonfin-trailer-overlay';
+        overlay.innerHTML =
+            '<div class="moonfin-trailer-modal" role="dialog" aria-modal="true" aria-label="' + (title || 'Trailer') + '">' +
+                '<button class="moonfin-trailer-close moonfin-focusable" aria-label="Close trailer" tabindex="0">' +
+                    '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.42L10.59 13.4 4.29 19.71 2.88 18.3 9.17 12 2.88 5.71 4.29 4.29l6.3 6.3 6.29-6.3z"/></svg>' +
+                '</button>' +
+                '<div class="moonfin-trailer-player-host"></div>' +
+            '</div>';
+
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) {
+                self.closeTrailerOverlay();
+            }
+        });
+
+        var closeBtn = overlay.querySelector('.moonfin-trailer-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function() {
+                self.closeTrailerOverlay();
             });
+        }
+
+        this._trailerEscHandler = function(e) {
+            if (e.key === 'Escape' || e.keyCode === 27 || e.keyCode === 461 || e.keyCode === 10009) {
+                e.preventDefault();
+                e.stopPropagation();
+                self.closeTrailerOverlay();
+            }
+        };
+
+        this._trailerPreviousFocus = document.activeElement;
+        this._trailerOverlay = overlay;
+        document.addEventListener('keydown', this._trailerEscHandler, true);
+        document.body.appendChild(overlay);
+
+        this.loadTrailerOverlayPlayer(source);
+
+        setTimeout(function() {
+            if (closeBtn) closeBtn.focus();
+        }, 0);
+    },
+
+    loadTrailerOverlayPlayer: function(source) {
+        if (!this._trailerOverlay) return;
+
+        var host = this._trailerOverlay.querySelector('.moonfin-trailer-player-host');
+        if (!host) return;
+
+        if (source.type === 'youtube' && source.videoId) {
+            this._loadTrailerYouTubePlayer(host, source.videoId);
             return;
         }
 
-        // Fall back to remote trailers
-        this.openRemoteTrailer(item);
+        host.innerHTML =
+            '<iframe class="moonfin-trailer-iframe visible" src="' + source.url + '" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen loading="eager" referrerpolicy="origin"></iframe>';
     },
 
-    openRemoteTrailer: function(item) {
-        if (item.RemoteTrailers && item.RemoteTrailers.length > 0) {
-            var url = item.RemoteTrailers[0].Url;
-            if (url) {
-                window.open(url, '_blank', 'noopener');
-            }
+    _ensureYTApi: function(callback) {
+        if (window.YT && window.YT.Player) {
+            callback();
+            return;
         }
+
+        if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+            var tag = document.createElement('script');
+            tag.src = 'https://www.youtube.com/iframe_api';
+            document.head.appendChild(tag);
+        }
+
+        var checkInterval = setInterval(function() {
+            if (window.YT && window.YT.Player) {
+                clearInterval(checkInterval);
+                callback();
+            }
+        }, 100);
+
+        setTimeout(function() { clearInterval(checkInterval); }, 10000);
+    },
+
+    _loadTrailerYouTubePlayer: function(host, videoId) {
+        var self = this;
+        host.innerHTML = '<div class="moonfin-trailer-loading"><div class="moonfin-spinner"></div><span>Loading trailer...</span></div>';
+
+        this._ensureYTApi(function() {
+            if (!self._trailerOverlay) return;
+
+            if (self._trailerPlayer) {
+                try { self._trailerPlayer.destroy(); } catch(e) {}
+                self._trailerPlayer = null;
+            }
+
+            var playerDiv = document.createElement('div');
+            playerDiv.id = 'moonfin-details-yt-player-' + Date.now();
+            playerDiv.className = 'moonfin-trailer-iframe';
+            host.innerHTML = '';
+            host.appendChild(playerDiv);
+
+            try {
+                self._trailerPlayer = new YT.Player(playerDiv.id, {
+                    videoId: videoId,
+                    playerVars: {
+                        autoplay: 1,
+                        controls: 1,
+                        rel: 0,
+                        modestbranding: 1,
+                        playsinline: 1,
+                        iv_load_policy: 3,
+                        fs: 1,
+                        origin: window.location.origin
+                    },
+                    events: {
+                        onReady: function(event) {
+                            event.target.playVideo();
+                            var iframe = host.querySelector('iframe');
+                            if (iframe) iframe.classList.add('visible');
+                        },
+                        onError: function(event) {
+                            console.warn('[Moonfin] Details: YouTube player error:', event.data);
+                            host.innerHTML = '<div class="moonfin-details-error"><span>Unable to load trailer</span></div>';
+                        }
+                    }
+                });
+            } catch(e) {
+                console.warn('[Moonfin] Details: Failed to create YouTube player:', e);
+                host.innerHTML = '<div class="moonfin-details-error"><span>Unable to load trailer</span></div>';
+            }
+        });
+    },
+
+    closeTrailerOverlay: function() {
+        if (!this._trailerOverlay) return false;
+
+        if (this._trailerEscHandler) {
+            document.removeEventListener('keydown', this._trailerEscHandler, true);
+            this._trailerEscHandler = null;
+        }
+
+        if (this._trailerPlayer) {
+            try { this._trailerPlayer.destroy(); } catch(e) {}
+            this._trailerPlayer = null;
+        }
+
+        var iframe = this._trailerOverlay.querySelector('.moonfin-trailer-iframe');
+        if (iframe && iframe.tagName === 'IFRAME') iframe.src = 'about:blank';
+
+        this._trailerOverlay.remove();
+        this._trailerOverlay = null;
+
+        if (this._trailerPreviousFocus && typeof this._trailerPreviousFocus.focus === 'function') {
+            this._trailerPreviousFocus.focus();
+        }
+        this._trailerPreviousFocus = null;
+        return true;
+    },
+
+    playLocalTrailer: function(item) {
+        var self = this;
+        if (!item.LocalTrailerCount || item.LocalTrailerCount <= 0) return;
+
+        var api = API.getApiClient();
+        var userId = api.getCurrentUserId();
+        var serverUrl = this.getServerUrl();
+        var headers = this.getAuthHeaders();
+
+        fetch(serverUrl + '/Users/' + userId + '/Items/' + item.Id + '/LocalTrailers', {
+            headers: headers
+        }).then(function(resp) {
+            return resp.json();
+        }).then(function(trailers) {
+            if (trailers && trailers.length > 0) {
+                self.hide(true);
+                self.playItem(trailers[0].Id, 0);
+            }
+        }).catch(function(err) {
+            console.error('[Moonfin] Details: Failed to load local trailers', err);
+        });
     },
 
     handleAction: function(action, item) {
@@ -2538,6 +2741,7 @@ var Details = {
 
     hide: function(skipHistoryBack) {
         if (!this.isVisible) return;
+        this.closeTrailerOverlay();
         this.container.classList.remove('visible');
         this.isVisible = false;
         this.currentItem = null;
