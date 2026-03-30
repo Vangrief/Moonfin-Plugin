@@ -18,7 +18,8 @@ public class JellyseerrSessionService
     private readonly ILogger<JellyseerrSessionService> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
     private static readonly SemaphoreSlim _lock = new(1, 1);
-    private static readonly string[] CsrfCookiePrefixes = { "XSRF-TOKEN=", "_csrf=" };
+    private static readonly string[] CsrfCookieNames = { "XSRF-TOKEN", "_csrf", "csrf", "csrfToken" };
+    private static readonly string[] CsrfProbePaths = { "/", "/api/v1/settings/public" };
 
     public JellyseerrSessionService(
         ILogger<JellyseerrSessionService> logger,
@@ -55,39 +56,47 @@ public class JellyseerrSessionService
 
     private async Task<string?> FetchCsrfTokenAsync(HttpClient client, string jellyseerrUrl, CookieContainer cookieContainer)
     {
-        try
+        var baseUrl = jellyseerrUrl.TrimEnd('/');
+        var baseUri = new Uri(baseUrl);
+
+        foreach (var path in CsrfProbePaths)
         {
-            using var response = await client.GetAsync($"{jellyseerrUrl}/api/v1/settings/public");
-
-            var cookies = cookieContainer.GetCookies(new Uri(jellyseerrUrl));
-            var csrfCookie = cookies["XSRF-TOKEN"]?.Value
-                ?? cookies["_csrf"]?.Value;
-
-            if (!string.IsNullOrEmpty(csrfCookie))
+            try
             {
-                return Uri.UnescapeDataString(csrfCookie);
-            }
+                using var response = await client.GetAsync(
+                    baseUrl + path,
+                    HttpCompletionOption.ResponseHeadersRead);
 
-            if (response.Headers.TryGetValues("Set-Cookie", out var setCookieHeaders))
-            {
+                var cookies = cookieContainer.GetCookies(baseUri);
+                foreach (var name in CsrfCookieNames)
+                {
+                    var cookie = cookies[name];
+                    if (cookie != null && !string.IsNullOrEmpty(cookie.Value))
+                        return Uri.UnescapeDataString(cookie.Value);
+                }
+
+                if (!response.Headers.TryGetValues("Set-Cookie", out var setCookieHeaders))
+                    continue;
+
                 foreach (var header in setCookieHeaders)
                 {
-                    foreach (var prefix in CsrfCookiePrefixes)
+                    foreach (var name in CsrfCookieNames)
                     {
-                        if (header.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                        {
-                            var value = header.Substring(prefix.Length);
-                            var semicolonIdx = value.IndexOf(';');
-                            if (semicolonIdx > 0) value = value.Substring(0, semicolonIdx);
-                            return Uri.UnescapeDataString(value);
-                        }
+                        var prefix = name + "=";
+                        if (!header.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        var value = header[prefix.Length..];
+                        var semi = value.IndexOf(';');
+                        if (semi > 0) value = value[..semi];
+                        return Uri.UnescapeDataString(value);
                     }
                 }
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Failed to fetch CSRF token from Jellyseerr (non-fatal)");
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogDebug(ex, "CSRF prefetch failed for {Url} (non-fatal)", baseUrl + path);
+            }
         }
 
         return null;
