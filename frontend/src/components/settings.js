@@ -103,9 +103,10 @@ var Settings = {
     },
 
     createRangeCard: function(id, title, description, min, max, step, currentValue, suffix) {
+        var rangeSuffix = suffix || '';
         return '<div class="moonfin-select-card">' +
             '<div class="moonfin-select-info">' +
-                '<div class="moonfin-toggle-title">' + title + ' <span class="moonfin-range-value" data-for="' + id + '">' + currentValue + (suffix || '') + '</span></div>' +
+                '<div class="moonfin-toggle-title">' + title + ' <span class="moonfin-range-value" data-for="' + id + '" data-suffix="' + rangeSuffix + '">' + currentValue + rangeSuffix + '</span></div>' +
                 (description ? '<div class="moonfin-toggle-desc">' + description + '</div>' : '') +
             '</div>' +
             '<input type="range" id="moonfin-' + id + '" name="' + id + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + currentValue + '" class="moonfin-panel-range">' +
@@ -345,6 +346,10 @@ var Settings = {
             '<div class="moonfin-color-preview" id="moonfin-color-preview" style="background:' + Storage.getColorHex(settings.mediaBarOverlayColor) + '"></div>' +
             this.createRangeCard('mediaBarOpacity', 'Overlay Opacity', 'Transparency of the gradient overlay', 0, 100, 5, settings.mediaBarOpacity, '%');
 
+        var detailsContent =
+            this.createRangeCard('detailsBackdropOpacity', 'Backdrop Opacity', 'Controls how dark the details background image is', 0, 100, 1, settings.detailsBackdropOpacity, '%') +
+            this.createRangeCard('detailsBackdropBlur', 'Backdrop Blur', 'Adds blur to the details background image', 0, 40, 1, settings.detailsBackdropBlur, 'px');
+
         var toolbarContent =
             this.createToggleCard('showShuffleButton', 'Shuffle Button', 'Show random content button in the toolbar', settings.showShuffleButton) +
             this.createSelectCard('shuffleContentType', 'Shuffle Content Type', 'What type of content to shuffle', [
@@ -569,6 +574,7 @@ var Settings = {
                     this.createSection('', 'Moonfin UI', uiContent, true) +
                     this.createSection('', 'Media Bar', mediaBarContent) +
                     this.createSection('', 'Overlay Appearance', overlayContent) +
+                    this.createSection('', 'Details Appearance', detailsContent) +
                     this.createSection('', 'Toolbar Buttons', toolbarContent) +
                     this.createSection('', 'Display', displayContent) +
                     this.createSection('', 'TMDB Episode Ratings', tmdbContent) +
@@ -642,7 +648,10 @@ var Settings = {
             if (rName in resolved) {
                 ranges[k].value = resolved[rName];
                 var valueSpan = this.dialog.querySelector('.moonfin-range-value[data-for="' + rName + '"]');
-                if (valueSpan) valueSpan.textContent = resolved[rName] + '%';
+                if (valueSpan) {
+                    var suffix = valueSpan.getAttribute('data-suffix') || '';
+                    valueSpan.textContent = resolved[rName] + suffix;
+                }
             }
         }
 
@@ -888,7 +897,8 @@ var Settings = {
                 range.addEventListener('input', function() {
                     var valueSpan = self.dialog.querySelector('.moonfin-range-value[data-for="' + range.name + '"]');
                     if (valueSpan) {
-                        valueSpan.textContent = range.value + '%';
+                        var suffix = valueSpan.getAttribute('data-suffix') || '';
+                        valueSpan.textContent = range.value + suffix;
                     }
                 });
                 range.addEventListener('change', function() {

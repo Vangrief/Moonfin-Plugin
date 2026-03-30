@@ -25,7 +25,11 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: #0a0a0a;
+    z-index: 1;
+    background-image: linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.38) 52vh, rgba(0,0,0,0.62) 100vh, rgba(0,0,0,0.78) 140vh);
+    background-repeat: no-repeat;
+    background-size: 100% 140vh;
+    background-color: transparent;
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-width: none;
@@ -41,26 +45,25 @@
     top: 0;
     left: 0;
     right: 0;
-    height: 70vh;
+    bottom: 0;
+    background-color: #050505;
     background-size: cover;
     background-position: center top;
     background-repeat: no-repeat;
-    opacity: 0.6;
+    overflow: hidden;
+    z-index: 0;
+}
+
+.moonfin-details-backdrop::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, var(--moonfin-details-backdrop-dim, 0.10));
+    pointer-events: none;
 }
 
 .moonfin-details-gradient {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 70vh;
-    background: linear-gradient(
-        to bottom,
-        rgba(10, 10, 10, 0.2) 0%,
-        rgba(10, 10, 10, 0.5) 35%,
-        rgba(10, 10, 10, 0.85) 65%,
-        #0a0a0a 100%
-    );
+    display: none;
 }
 
 .moonfin-details-back {
@@ -910,12 +913,9 @@ body.moonfin-navbar-active .moonfin-details-back {
 }
 
 @media (max-width: 768px) {
-    .moonfin-details-backdrop {
-        height: 55vh;
-    }
-
-    .moonfin-details-gradient {
-        height: 55vh;
+    .moonfin-details-panel {
+        background-image: linear-gradient(to bottom, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.48) 42vh, rgba(0,0,0,0.72) 90vh, rgba(0,0,0,0.82) 120vh);
+        background-size: 100% 120vh;
     }
 
     .moonfin-details-content {
@@ -1025,12 +1025,9 @@ body.moonfin-navbar-active .moonfin-details-back {
 }
 
 @media (max-width: 480px) {
-    .moonfin-details-backdrop {
-        height: 45vh;
-    }
-
-    .moonfin-details-gradient {
-        height: 45vh;
+    .moonfin-details-panel {
+        background-image: linear-gradient(to bottom, rgba(0,0,0,0.16) 0%, rgba(0,0,0,0.54) 34vh, rgba(0,0,0,0.76) 78vh, rgba(0,0,0,0.86) 110vh);
+        background-size: 100% 110vh;
     }
 
     .moonfin-details-content {

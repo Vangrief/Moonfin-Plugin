@@ -333,7 +333,7 @@ const Sidebar = {
     },
 
     async handleNavigation(action, btn) {
-        if (Details.isVisible) {
+        if (action !== 'settings' && Details.isVisible) {
             Details.hide(true);
         }
 
@@ -342,11 +342,11 @@ const Sidebar = {
             this.updateJellyseerrButtonState();
         }
 
-        if (action !== 'genres' && Genres.isVisible) {
+        if (action !== 'genres' && action !== 'settings' && Genres.isVisible) {
             Genres.close();
         }
 
-        if (action !== 'library' && Library.isVisible) {
+        if (action !== 'library' && action !== 'settings' && Library.isVisible) {
             Library.close();
         }
 

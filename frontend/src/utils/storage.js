@@ -19,6 +19,8 @@ const Storage = {
     defaults: {
         navbarEnabled: false,
         detailsPageEnabled: false,
+        detailsBackdropOpacity: 90,
+        detailsBackdropBlur: 0,
 
         mediaBarEnabled: false,
         mediaBarItemCount: 10,
@@ -434,6 +436,8 @@ const Storage = {
         var mapping = {
             navbarEnabled: 'navbarEnabled',
             detailsPageEnabled: 'detailsPageEnabled',
+            detailsBackdropOpacity: 'detailsBackdropOpacity',
+            detailsBackdropBlur: 'detailsBackdropBlur',
             mediaBarEnabled: 'mediaBarEnabled',
             mediaBarItemCount: 'mediaBarItemCount',
             mediaBarOpacity: 'mediaBarOpacity',
@@ -484,6 +488,8 @@ const Storage = {
         return {
             navbarEnabled: localProfile.navbarEnabled,
             detailsPageEnabled: localProfile.detailsPageEnabled,
+            detailsBackdropOpacity: localProfile.detailsBackdropOpacity,
+            detailsBackdropBlur: localProfile.detailsBackdropBlur,
             mediaBarEnabled: localProfile.mediaBarEnabled,
             mediaBarItemCount: localProfile.mediaBarItemCount,
             mediaBarOpacity: localProfile.mediaBarOpacity,

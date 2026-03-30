@@ -6,12 +6,18 @@ var Details = {
     _trailerEscHandler: null,
     _trailerPreviousFocus: null,
     _trailerPlayer: null,
+    _settingsChangedHandler: null,
 
     init: function() {
-        console.log('[Moonfin] Details: Initializing...');
         this.createContainer();
         this.setupItemInterception();
-        console.log('[Moonfin] Details: Initialized');
+        if (!this._settingsChangedHandler) {
+            var self = this;
+            this._settingsChangedHandler = function() {
+                self.applyBackdropSettings();
+            };
+            window.addEventListener('moonfin-settings-changed', this._settingsChangedHandler);
+        }
     },
 
     createContainer: function() {
@@ -20,8 +26,27 @@ var Details = {
 
         this.container = document.createElement('div');
         this.container.className = 'moonfin-details-overlay';
-        this.container.innerHTML = '<div class="moonfin-details-panel"></div>';
+        this.container.innerHTML = '<div class="moonfin-details-backdrop"></div><div class="moonfin-details-panel"></div>';
         document.body.appendChild(this.container);
+        this.applyBackdropSettings();
+    },
+
+    applyBackdropSettings: function() {
+        var backdrop = this.container ? this.container.querySelector('.moonfin-details-backdrop') : null;
+        if (!backdrop) return;
+
+        var settings = Storage.getAll();
+        var opacity = parseInt(settings.detailsBackdropOpacity, 10);
+        if (isNaN(opacity)) opacity = 90;
+        opacity = Math.max(0, Math.min(100, opacity));
+
+        var blur = parseInt(settings.detailsBackdropBlur, 10);
+        if (isNaN(blur)) blur = 0;
+        blur = Math.max(0, Math.min(40, blur));
+
+        var dim = (100 - opacity) / 100;
+        backdrop.style.setProperty('--moonfin-details-backdrop-dim', dim.toFixed(2));
+        backdrop.style.filter = blur > 0 ? 'blur(' + blur + 'px)' : 'none';
     },
 
     setupItemInterception: function() {
@@ -670,10 +695,13 @@ var Details = {
             '</div>';
         }
 
+        var backdrop = this.container.querySelector('.moonfin-details-backdrop');
+        if (backdrop) {
+            backdrop.style.backgroundImage = 'url(\'' + backdropUrl + '\')';
+            backdrop.className = 'moonfin-details-backdrop';
+        }
+
         panel.innerHTML = 
-            '<div class="moonfin-details-backdrop" style="background-image: url(\'' + backdropUrl + '\')"></div>' +
-            '<div class="moonfin-details-gradient"></div>' +
-            
             '<button class="moonfin-details-back moonfin-focusable" title="Back" tabindex="0">' +
                 '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>' +
             '</button>' +
@@ -728,6 +756,7 @@ var Details = {
                 '</div>' +
             '</div>';
 
+        this.applyBackdropSettings();
         this.setupPanelListeners(panel, item);
     },
 
@@ -2449,10 +2478,13 @@ var Details = {
             '</div>';
         }).join('');
 
-        panel.innerHTML =
-            '<div class="moonfin-details-backdrop" style="background-image: url(\'' + backdropUrl + '\')"></div>' +
-            '<div class="moonfin-details-gradient"></div>' +
+        var backdrop = this.container.querySelector('.moonfin-details-backdrop');
+        if (backdrop) {
+            backdrop.style.backgroundImage = 'url(\'' + backdropUrl + '\')';
+            backdrop.className = 'moonfin-details-backdrop';
+        }
 
+        panel.innerHTML =
             '<button class="moonfin-details-back moonfin-focusable" title="Back" tabindex="0">' +
                 '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>' +
             '</button>' +
@@ -2474,6 +2506,7 @@ var Details = {
                 '</div>' +
             '</div>';
 
+        this.applyBackdropSettings();
         this.setupSeasonPanelListeners(panel, item, episodes);
 
         if (Tmdb.isEnabled() && item.SeriesId) {
@@ -2692,10 +2725,13 @@ var Details = {
             '</div>'
         ) : '';
 
-        panel.innerHTML =
-            '<div class="moonfin-details-backdrop moonfin-person-backdrop"></div>' +
-            '<div class="moonfin-details-gradient"></div>' +
+        var backdrop = this.container.querySelector('.moonfin-details-backdrop');
+        if (backdrop) {
+            backdrop.style.backgroundImage = '';
+            backdrop.className = 'moonfin-details-backdrop moonfin-person-backdrop';
+        }
 
+        panel.innerHTML =
             '<button class="moonfin-details-back moonfin-focusable" title="Back" tabindex="0">' +
                 '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>' +
             '</button>' +
@@ -2718,6 +2754,7 @@ var Details = {
                 '</div>' +
             '</div>';
 
+        this.applyBackdropSettings();
         this.setupPersonPanelListeners(panel, item);
     },
 

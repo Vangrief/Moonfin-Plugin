@@ -21,6 +21,8 @@ namespace Moonfin.Server.Api;
 [Produces(MediaTypeNames.Application.Json)]
 public class MoonfinController : ControllerBase
 {
+    private const int MaxDetailsBackdropBlur = 40;
+
     private readonly MoonfinSettingsService _settingsService;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILibraryManager _libraryManager;
@@ -293,6 +295,232 @@ public class MoonfinController : ControllerBase
         }
 
         return Ok(resolved);
+    }
+
+    /// <summary>
+    /// Gets resolved details screen blur for the current user.
+    /// </summary>
+    [HttpGet("Settings/detailsScreenBlur")]
+    [HttpGet("Settings/detailsScreenBlur/{profile}")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<MoonfinDetailsScreenBlurResponse>> GetDetailsScreenBlur([FromRoute] string? profile = null)
+    {
+        var config = MoonfinPlugin.Instance?.Configuration;
+
+        if (config?.EnableSettingsSync != true)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { Error = "Settings sync is disabled" });
+        }
+
+        var userId = this.GetUserIdFromClaims();
+        if (userId == null)
+        {
+            return Unauthorized(new { Error = "User not authenticated" });
+        }
+
+        var resolvedProfileName = string.IsNullOrWhiteSpace(profile) ? "global" : profile.ToLowerInvariant();
+        if (!MoonfinUserSettings.ValidProfiles.Contains(resolvedProfileName))
+        {
+            return BadRequest(new { Error = $"Invalid profile: {resolvedProfileName}. Valid profiles: {string.Join(", ", MoonfinUserSettings.ValidProfiles)}" });
+        }
+
+        var resolved = await _settingsService.GetResolvedProfileAsync(userId.Value, resolvedProfileName)
+            ?? config?.DefaultUserSettings
+            ?? new MoonfinSettingsProfile();
+
+        var blur = Math.Clamp(ResolveBackdropBlur(resolved), 0, MaxDetailsBackdropBlur);
+
+        return Ok(new MoonfinDetailsScreenBlurResponse
+        {
+            Profile = resolvedProfileName,
+            DetailsScreenBlur = blur.ToString()
+        });
+    }
+
+    /// <summary>
+    /// Saves details screen blur for a specific profile for the current user.
+    /// </summary>
+    [HttpPost("Settings/detailsScreenBlur")]
+    [HttpPost("Settings/detailsScreenBlur/{profile}")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<MoonfinDetailsScreenBlurSaveResponse>> SaveDetailsScreenBlur(
+        [FromBody] MoonfinDetailsScreenBlurRequest request,
+        [FromRoute] string? profile = null)
+    {
+        var config = MoonfinPlugin.Instance?.Configuration;
+
+        if (config?.EnableSettingsSync != true)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { Error = "Settings sync is disabled" });
+        }
+
+        var userId = this.GetUserIdFromClaims();
+        if (userId == null)
+        {
+            return Unauthorized(new { Error = "User not authenticated" });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.DetailsScreenBlur))
+        {
+            return BadRequest(new { Error = "detailsScreenBlur is required" });
+        }
+
+        var targetProfile = string.IsNullOrWhiteSpace(profile)
+            ? (string.IsNullOrWhiteSpace(request.Profile) ? "global" : request.Profile.ToLowerInvariant())
+            : profile.ToLowerInvariant();
+
+        if (!MoonfinUserSettings.ValidProfiles.Contains(targetProfile))
+        {
+            return BadRequest(new { Error = $"Invalid profile: {targetProfile}. Valid profiles: {string.Join(", ", MoonfinUserSettings.ValidProfiles)}" });
+        }
+
+        if (!int.TryParse(request.DetailsScreenBlur, out var parsedBlur))
+        {
+            return BadRequest(new { Error = "detailsScreenBlur must be a numeric string" });
+        }
+
+        var normalizedBlur = Math.Clamp(parsedBlur, 0, MaxDetailsBackdropBlur);
+        var profilePatch = new MoonfinSettingsProfile
+        {
+            DetailsBackdropBlur = normalizedBlur,
+            DetailsScreenBlur = normalizedBlur.ToString()
+        };
+
+        var existed = _settingsService.UserSettingsExist(userId.Value);
+        await _settingsService.SaveProfileAsync(userId.Value, targetProfile, profilePatch, request.ClientId ?? "moonfin-detailsScreenBlur-endpoint");
+
+        return Ok(new MoonfinDetailsScreenBlurSaveResponse
+        {
+            Success = true,
+            Created = !existed,
+            UserId = userId.Value,
+            Profile = targetProfile,
+            DetailsScreenBlur = normalizedBlur.ToString()
+        });
+    }
+
+    /// <summary>
+    /// Gets resolved details screen opacity for the current user.
+    /// </summary>
+    [HttpGet("Settings/detailsScreenOpacity")]
+    [HttpGet("Settings/detailsScreenOpacity/{profile}")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<MoonfinDetailsScreenOpacityResponse>> GetDetailsScreenOpacity([FromRoute] string? profile = null)
+    {
+        var config = MoonfinPlugin.Instance?.Configuration;
+
+        if (config?.EnableSettingsSync != true)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { Error = "Settings sync is disabled" });
+        }
+
+        var userId = this.GetUserIdFromClaims();
+        if (userId == null)
+        {
+            return Unauthorized(new { Error = "User not authenticated" });
+        }
+
+        var resolvedProfileName = string.IsNullOrWhiteSpace(profile) ? "global" : profile.ToLowerInvariant();
+        if (!MoonfinUserSettings.ValidProfiles.Contains(resolvedProfileName))
+        {
+            return BadRequest(new { Error = $"Invalid profile: {resolvedProfileName}. Valid profiles: {string.Join(", ", MoonfinUserSettings.ValidProfiles)}" });
+        }
+
+        var resolved = await _settingsService.GetResolvedProfileAsync(userId.Value, resolvedProfileName)
+            ?? config?.DefaultUserSettings
+            ?? new MoonfinSettingsProfile();
+
+        var opacity = Math.Clamp(resolved.DetailsBackdropOpacity ?? 90, 0, 100);
+
+        return Ok(new MoonfinDetailsScreenOpacityResponse
+        {
+            Profile = resolvedProfileName,
+            DetailsScreenOpacity = opacity
+        });
+    }
+
+    /// <summary>
+    /// Saves details screen opacity for a specific profile for the current user.
+    /// </summary>
+    [HttpPost("Settings/detailsScreenOpacity")]
+    [HttpPost("Settings/detailsScreenOpacity/{profile}")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<MoonfinDetailsScreenOpacitySaveResponse>> SaveDetailsScreenOpacity(
+        [FromBody] MoonfinDetailsScreenOpacityRequest request,
+        [FromRoute] string? profile = null)
+    {
+        var config = MoonfinPlugin.Instance?.Configuration;
+
+        if (config?.EnableSettingsSync != true)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { Error = "Settings sync is disabled" });
+        }
+
+        var userId = this.GetUserIdFromClaims();
+        if (userId == null)
+        {
+            return Unauthorized(new { Error = "User not authenticated" });
+        }
+
+        if (!request.DetailsScreenOpacity.HasValue)
+        {
+            return BadRequest(new { Error = "detailsScreenOpacity is required" });
+        }
+
+        var targetProfile = string.IsNullOrWhiteSpace(profile)
+            ? (string.IsNullOrWhiteSpace(request.Profile) ? "global" : request.Profile.ToLowerInvariant())
+            : profile.ToLowerInvariant();
+
+        if (!MoonfinUserSettings.ValidProfiles.Contains(targetProfile))
+        {
+            return BadRequest(new { Error = $"Invalid profile: {targetProfile}. Valid profiles: {string.Join(", ", MoonfinUserSettings.ValidProfiles)}" });
+        }
+
+        var normalizedOpacity = Math.Clamp(request.DetailsScreenOpacity.Value, 0, 100);
+        var profilePatch = new MoonfinSettingsProfile
+        {
+            DetailsBackdropOpacity = normalizedOpacity
+        };
+
+        var existed = _settingsService.UserSettingsExist(userId.Value);
+        await _settingsService.SaveProfileAsync(userId.Value, targetProfile, profilePatch, request.ClientId ?? "moonfin-detailsScreenOpacity-endpoint");
+
+        return Ok(new MoonfinDetailsScreenOpacitySaveResponse
+        {
+            Success = true,
+            Created = !existed,
+            UserId = userId.Value,
+            Profile = targetProfile,
+            DetailsScreenOpacity = normalizedOpacity
+        });
+    }
+
+    private static int ResolveBackdropBlur(MoonfinSettingsProfile profile)
+    {
+        if (profile.DetailsBackdropBlur.HasValue)
+        {
+            return profile.DetailsBackdropBlur.Value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(profile.DetailsScreenBlur)
+            && int.TryParse(profile.DetailsScreenBlur, out var legacyBlur))
+        {
+            return legacyBlur;
+        }
+
+        return 0;
     }
 
     /// <summary>
@@ -921,6 +1149,46 @@ public class MoonfinProfileSaveRequest
 /// Response for saving settings.
 /// </summary>
 public class MoonfinSaveResponse
+{
+    public bool Success { get; set; }
+    public bool Created { get; set; }
+    public Guid UserId { get; set; }
+}
+
+public class MoonfinDetailsScreenBlurRequest
+{
+    public string? Profile { get; set; }
+    public string? DetailsScreenBlur { get; set; }
+    public string? ClientId { get; set; }
+}
+
+public class MoonfinDetailsScreenBlurResponse
+{
+    public string Profile { get; set; } = "global";
+    public string DetailsScreenBlur { get; set; } = "0";
+}
+
+public class MoonfinDetailsScreenBlurSaveResponse : MoonfinDetailsScreenBlurResponse
+{
+    public bool Success { get; set; }
+    public bool Created { get; set; }
+    public Guid UserId { get; set; }
+}
+
+public class MoonfinDetailsScreenOpacityRequest
+{
+    public string? Profile { get; set; }
+    public int? DetailsScreenOpacity { get; set; }
+    public string? ClientId { get; set; }
+}
+
+public class MoonfinDetailsScreenOpacityResponse
+{
+    public string Profile { get; set; } = "global";
+    public int DetailsScreenOpacity { get; set; }
+}
+
+public class MoonfinDetailsScreenOpacitySaveResponse : MoonfinDetailsScreenOpacityResponse
 {
     public bool Success { get; set; }
     public bool Created { get; set; }

@@ -257,6 +257,8 @@ public class MoonfinSettingsService
         settings.TmdbEpisodeRatingsEnabled = null;
         settings.NavbarEnabled = null;
         settings.DetailsPageEnabled = null;
+        settings.DetailsBackdropOpacity = null;
+        settings.DetailsBackdropBlur = null;
         settings.NavbarPosition = null;
         settings.ShowClock = null;
         settings.Use24HourClock = null;
