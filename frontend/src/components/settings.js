@@ -63,6 +63,47 @@ var Settings = {
         }, 2000);
     },
 
+    showSyncModeDialog: function() {
+        var self = this;
+        return new Promise(function(resolve) {
+            if (!self.dialog) {
+                resolve(null);
+                return;
+            }
+
+            var existing = self.dialog.querySelector('.moonfin-sync-choice-backdrop');
+            if (existing) existing.remove();
+
+            var backdrop = document.createElement('div');
+            backdrop.className = 'moonfin-sync-choice-backdrop';
+            backdrop.innerHTML =
+                '<div class="moonfin-sync-choice-modal" role="dialog" aria-modal="true" aria-labelledby="moonfin-sync-choice-title">' +
+                    '<h3 id="moonfin-sync-choice-title">Choose Sync Direction</h3>' +
+                    '<p>Pick how to sync this account\'s Moonfin profiles.</p>' +
+                    '<div class="moonfin-sync-choice-actions">' +
+                        '<button type="button" class="moonfin-panel-btn moonfin-panel-btn-primary" data-choice="push">Push to Profile</button>' +
+                        '<button type="button" class="moonfin-panel-btn moonfin-panel-btn-ghost" data-choice="pull">Pull from Profile</button>' +
+                        '<button type="button" class="moonfin-panel-btn moonfin-panel-btn-ghost" data-choice="cancel">Cancel</button>' +
+                    '</div>' +
+                '</div>';
+
+            var cleanup = function(choice) {
+                if (backdrop && backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
+                resolve(choice);
+            };
+
+            backdrop.addEventListener('click', function(e) {
+                if (e.target === backdrop) cleanup(null);
+            });
+
+            backdrop.querySelector('[data-choice="push"]').addEventListener('click', function() { cleanup('push'); });
+            backdrop.querySelector('[data-choice="pull"]').addEventListener('click', function() { cleanup('pull'); });
+            backdrop.querySelector('[data-choice="cancel"]').addEventListener('click', function() { cleanup(null); });
+
+            self.dialog.appendChild(backdrop);
+        });
+    },
+
     saveSetting: function(name, value) {
         var profileName = Storage.getActiveEditProfile();
         var profile = Storage.getProfile(profileName);
@@ -816,17 +857,55 @@ var Settings = {
 
         this.dialog.querySelector('.moonfin-settings-sync').addEventListener('click', function() {
             var syncBtn = self.dialog.querySelector('.moonfin-settings-sync');
-            syncBtn.disabled = true;
-            syncBtn.textContent = 'Syncing...';
+            self.showSyncModeDialog().then(function(syncChoice) {
+                if (!syncChoice) {
+                    self.showToast('Sync canceled');
+                    return;
+                }
 
-            Storage.sync(true).then(function() {
-                return self.updateSyncStatus();
-            }).then(function() {
-                syncBtn.disabled = false;
-                syncBtn.textContent = 'Sync';
-                self.showToast('Settings synced from server');
-                self.hide();
-                setTimeout(function() { self.show(); }, 350);
+                syncBtn.disabled = true;
+                syncBtn.textContent = 'Syncing...';
+
+                var op;
+                if (syncChoice === 'push') {
+                    var localProfiles = Storage.getProfiles();
+                    op = Storage.pingServer().then(function(ping) {
+                        if (!Storage.isSyncEnabled() || !ping || !ping.installed || !ping.settingsSyncEnabled) {
+                            return false;
+                        }
+                        return Storage.saveAllProfilesToServer(localProfiles);
+                    }).then(function(ok) {
+                        if (ok) Storage.saveSnapshot(localProfiles);
+                        return ok;
+                    });
+                } else {
+                    op = Storage.pingServer().then(function(ping) {
+                        if (!Storage.isSyncEnabled() || !ping || !ping.installed || !ping.settingsSyncEnabled) {
+                            return false;
+                        }
+                        return Storage.sync(true).then(function() { return true; });
+                    });
+                }
+
+                return op.then(function(ok) {
+                    return self.updateSyncStatus().then(function() { return ok; });
+                }).then(function(ok) {
+                    syncBtn.disabled = false;
+                    syncBtn.textContent = 'Sync';
+
+                    if (!ok) {
+                        self.showToast('Sync failed');
+                        return;
+                    }
+
+                    self.showToast(syncChoice === 'pull' ? 'Pulled settings from profile' : 'Pushed settings to profile');
+                    self.hide();
+                    setTimeout(function() { self.show(); }, 350);
+                }).catch(function() {
+                    syncBtn.disabled = false;
+                    syncBtn.textContent = 'Sync';
+                    self.showToast('Sync failed');
+                });
             });
         });
 

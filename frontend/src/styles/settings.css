@@ -508,6 +508,48 @@
     align-items: center;
 }
 
+.moonfin-sync-choice-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 30;
+}
+
+.moonfin-sync-choice-modal {
+    width: 100%;
+    max-width: 360px;
+    background: rgba(22, 22, 28, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+    padding: 16px;
+}
+
+.moonfin-sync-choice-modal h3 {
+    margin: 0 0 6px;
+    font-size: 17px;
+    color: #fff;
+}
+
+.moonfin-sync-choice-modal p {
+    margin: 0 0 14px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.72);
+    line-height: 1.45;
+}
+
+.moonfin-sync-choice-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
 .moonfin-sync-status {
     display: flex;
     align-items: center;
