@@ -495,7 +495,7 @@ body.moonfin-navbar-active .moonfin-details-back {
     display: flex;
     gap: 16px;
     overflow-x: auto;
-    padding-bottom: 16px;
+    padding: 4px 0 16px;
     -webkit-overflow-scrolling: touch;
     scroll-snap-type: x proximity;
     scrollbar-width: none;
@@ -819,6 +819,68 @@ body.moonfin-navbar-active .moonfin-details-back {
 .moonfin-episode-ep-runtime {
     font-size: 12px;
     color: rgba(255, 255, 255, 0.4);
+    flex-shrink: 0;
+}
+
+.moonfin-chapter-card {
+    flex-shrink: 0;
+    width: 300px;
+    cursor: pointer;
+    scroll-snap-align: start;
+    transition: transform 0.2s;
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.04);
+    border: 2px solid transparent;
+}
+
+.moonfin-chapter-card:hover,
+.moonfin-chapter-card:focus {
+    transform: scale(1.02);
+    outline: none;
+    border-color: rgba(0, 164, 220, 0.5);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.moonfin-chapter-thumb {
+    position: relative;
+    width: 100%;
+    height: 168px;
+    background: #1a1a1a;
+    overflow: hidden;
+}
+
+.moonfin-chapter-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.moonfin-chapter-thumb.moonfin-chapter-thumb-empty {
+    background: linear-gradient(135deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02));
+}
+
+.moonfin-chapter-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+}
+
+.moonfin-chapter-title {
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.moonfin-chapter-time {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
     flex-shrink: 0;
 }
 
@@ -1245,6 +1307,22 @@ body.moonfin-navbar-active .moonfin-details-back {
         gap: 6px;
     }
 
+    .moonfin-chapter-card {
+        width: 240px;
+    }
+
+    .moonfin-chapter-thumb {
+        height: 135px;
+    }
+
+    .moonfin-chapter-title {
+        font-size: 12px;
+    }
+
+    .moonfin-chapter-time {
+        font-size: 11px;
+    }
+
     .moonfin-details-loading,
     .moonfin-details-error {
         font-size: 14px;
@@ -1322,6 +1400,14 @@ body.moonfin-navbar-active .moonfin-details-back {
     .moonfin-similar-poster {
         width: 110px;
         height: 165px;
+    }
+
+    .moonfin-chapter-card {
+        width: 210px;
+    }
+
+    .moonfin-chapter-thumb {
+        height: 118px;
     }
 
     .moonfin-season-card {

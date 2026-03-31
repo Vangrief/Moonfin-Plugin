@@ -264,17 +264,21 @@ var Details = {
             var castPromise = Promise.resolve(item.People || []);
             var seasonsPromise = item.Type === 'Series' ? self.fetchSeasons(api, itemId).catch(function() { return []; }) : Promise.resolve([]);
             var episodesPromise = (item.Type === 'Episode' && item.SeasonId) ? self.fetchEpisodes(api, item.SeriesId, item.SeasonId).catch(function() { return []; }) : ((item.Type === 'Season' && item.SeriesId) ? self.fetchEpisodes(api, item.SeriesId, item.Id).catch(function() { return []; }) : Promise.resolve([]));
+            var featuresPromise = self.fetchSpecialFeatures(api, item).catch(function() { return []; });
+            var collectionsPromise = self.fetchCollectionItems(api, item).catch(function() { return null; });
 
-            return Promise.all([similarPromise, castPromise, seasonsPromise, episodesPromise]).then(function(results) {
+            return Promise.all([similarPromise, castPromise, seasonsPromise, episodesPromise, featuresPromise, collectionsPromise]).then(function(results) {
                 var similar = results[0];
                 var cast = results[1];
                 var seasons = results[2];
                 var episodes = results[3];
+                var features = results[4] || [];
+                var collections = results[5] || { title: '', items: [] };
                 
                 if (item.Type === 'Season') {
                     self.renderSeasonDetails(item, episodes);
                 } else {
-                    self.renderDetails(item, similar, cast, seasons, episodes);
+                    self.renderDetails(item, similar, cast, seasons, episodes, features, collections);
                 }
 
                 if (MdbList.isEnabled()) {
@@ -361,7 +365,127 @@ var Details = {
         });
     },
 
-    renderDetails: function(item, similar, cast, seasons, episodes) {
+    fetchSpecialFeatures: function(api, item) {
+        if (!item || !item.Id) return Promise.resolve([]);
+        if (!item.SpecialFeatureCount) return Promise.resolve([]);
+
+        var userId = api.getCurrentUserId();
+        var serverUrl = api._serverAddress || api.serverAddress();
+        var headers = this.getAuthHeaders();
+
+        return fetch(serverUrl + '/Users/' + userId + '/Items/' + item.Id + '/SpecialFeatures?Fields=PrimaryImageAspectRatio,UserData', {
+            headers: headers
+        }).then(function(resp) {
+            if (!resp.ok) throw new Error('Failed to fetch special features');
+            return resp.json();
+        }).then(function(result) {
+            if (Array.isArray(result)) return result;
+            return result.Items || [];
+        });
+    },
+
+    fetchCollectionItems: function(api, item) {
+        if (!item || !item.Id) return Promise.resolve({ title: '', items: [] });
+
+        var type = item.Type;
+        var supportsCollections = ['Movie', 'Series', 'BoxSet'];
+        if (supportsCollections.indexOf(type) === -1) {
+            return Promise.resolve({ title: '', items: [] });
+        }
+
+        var userId = api.getCurrentUserId();
+        var serverUrl = api._serverAddress || api.serverAddress();
+        var headers = this.getAuthHeaders();
+        var self = this;
+
+        if (type === 'BoxSet') {
+            return fetch(serverUrl + '/Users/' + userId + '/Items?ParentId=' + item.Id + '&SortBy=SortName&SortOrder=Ascending&Fields=PrimaryImageAspectRatio,UserData', {
+                headers: headers
+            }).then(function(resp) {
+                if (!resp.ok) throw new Error('Failed to fetch boxset items');
+                return resp.json();
+            }).then(function(result) {
+                var items = result.Items || [];
+                return {
+                    title: item.Name || 'Collection',
+                    items: items
+                };
+            });
+        }
+
+        return self._findBoxSetForItem(serverUrl, userId, headers, item).then(function(boxSet) {
+            if (!boxSet || !boxSet.Id) {
+                return { title: '', items: [] };
+            }
+
+            return fetch(serverUrl + '/Users/' + userId + '/Items?ParentId=' + boxSet.Id + '&SortBy=PremiereDate,SortName&SortOrder=Ascending&Fields=PrimaryImageAspectRatio,UserData', {
+                headers: headers
+            }).then(function(itemsResp) {
+                if (!itemsResp.ok) throw new Error('Failed to fetch parent collection items');
+                return itemsResp.json();
+            }).then(function(result) {
+                return {
+                    title: boxSet.Name || 'Collection',
+                    items: result.Items || []
+                };
+            });
+        }).catch(function() {
+            return { title: '', items: [] };
+        });
+    },
+
+    _findBoxSetForItem: function(serverUrl, userId, headers, item) {
+        return fetch(serverUrl + '/Users/' + userId + '/Items?Ids=' + item.Id + '&IncludeItemTypes=Movie,Series,BoxSet&Recursive=true&CollapseBoxSetItems=true&Fields=BasicSyncInfo', {
+            headers: headers
+        }).then(function(resp) {
+            if (!resp.ok) return null;
+            return resp.json();
+        }).then(function(result) {
+            var items = (result && result.Items) || [];
+            for (var i = 0; i < items.length; i++) {
+                if (items[i] && items[i].Type === 'BoxSet' && items[i].Id) {
+                    return items[i];
+                }
+            }
+
+            return fetch(serverUrl + '/Users/' + userId + '/Items?IncludeItemTypes=BoxSet&Recursive=true&SortBy=SortName&Fields=BasicSyncInfo', {
+                headers: headers
+            }).then(function(resp) {
+                if (!resp.ok) return null;
+                return resp.json();
+            }).then(function(boxSetsResult) {
+                var boxSets = (boxSetsResult && boxSetsResult.Items) || [];
+                if (boxSets.length === 0) return null;
+
+                var checkBoxSet = function(index) {
+                    if (index >= boxSets.length) return Promise.resolve(null);
+                    var bs = boxSets[index];
+                    if (!bs || !bs.Id) return checkBoxSet(index + 1);
+
+                    return fetch(serverUrl + '/Users/' + userId + '/Items?ParentId=' + bs.Id + '&Fields=BasicSyncInfo', {
+                        headers: headers
+                    }).then(function(resp) {
+                        if (!resp.ok) return checkBoxSet(index + 1);
+                        return resp.json();
+                    }).then(function(childrenResult) {
+                        var children = (childrenResult && childrenResult.Items) || [];
+                        for (var j = 0; j < children.length; j++) {
+                            if (children[j] && children[j].Id === item.Id) {
+                                return bs;
+                            }
+                        }
+                        return checkBoxSet(index + 1);
+                    });
+                };
+
+                return checkBoxSet(0);
+            });
+        }).catch(function() {
+            return null;
+        });
+    },
+
+    renderDetails: function(item, similar, cast, seasons, episodes, features, collections) {
         var self = this;
         var panel = this.container.querySelector('.moonfin-details-panel');
         var api = API.getApiClient();
@@ -695,6 +819,84 @@ var Details = {
             '</div>';
         }
 
+        var chapters = item.Chapters || [];
+        var chaptersHtml = chapters.length > 0 ? (
+            '<div class="moonfin-section">' +
+                '<div class="moonfin-section-header">' +
+                    '<h3 class="moonfin-section-title">Chapters</h3>' +
+                    arrowsHtml +
+                '</div>' +
+                '<div class="moonfin-section-scroll">' +
+                    chapters.map(function(chapter, index) {
+                        var chapterName = (chapter.Name && chapter.Name.trim()) ? chapter.Name : ('Chapter ' + (index + 1));
+                        var startTicks = chapter.StartPositionTicks || 0;
+                        var chapterTag = chapter.ImageTag ? '&tag=' + encodeURIComponent(chapter.ImageTag) : '';
+                        var chapterImage = serverUrl + '/Items/' + item.Id + '/Images/Chapter/' + index + '?maxWidth=600&quality=80' + chapterTag;
+                        var chapterStart = self.formatTimePosition(startTicks);
+
+                        return '<div class="moonfin-chapter-card moonfin-focusable" data-start-ticks="' + startTicks + '" tabindex="0">' +
+                            '<div class="moonfin-chapter-thumb">' +
+                                '<img src="' + chapterImage + '" alt="" loading="lazy" onerror="this.style.display=\'none\';this.parentNode.classList.add(\'moonfin-chapter-thumb-empty\')">' +
+                            '</div>' +
+                            '<div class="moonfin-chapter-info">' +
+                                '<span class="moonfin-chapter-title">' + chapterName + '</span>' +
+                                '<span class="moonfin-chapter-time">' + chapterStart + '</span>' +
+                            '</div>' +
+                        '</div>';
+                    }).join('') +
+                '</div>' +
+            '</div>'
+        ) : '';
+
+        var featureItems = features || [];
+        var featuresHtml = featureItems.length > 0 ? (
+            '<div class="moonfin-section">' +
+                '<div class="moonfin-section-header">' +
+                    '<h3 class="moonfin-section-title">Features</h3>' +
+                    arrowsHtml +
+                '</div>' +
+                '<div class="moonfin-section-scroll">' +
+                    featureItems.slice(0, 20).map(function(feature) {
+                        var featurePosterTag = feature.ImageTags ? (feature.ImageTags.Primary || feature.ImageTags.Thumb) : null;
+                        var featurePosterUrl = featurePosterTag ? serverUrl + '/Items/' + feature.Id + '/Images/Primary?maxHeight=400&quality=80' : '';
+                        var featureWatched = feature.UserData && feature.UserData.Played;
+                        return '<div class="moonfin-similar-card moonfin-focusable" data-item-id="' + feature.Id + '" data-type="' + (feature.Type || 'Video') + '" tabindex="0">' +
+                            '<div class="moonfin-similar-poster">' +
+                                (featurePosterUrl ? '<img src="' + featurePosterUrl + '" alt="" loading="lazy">' : '') +
+                                (featureWatched ? '<div class="moonfin-watched-indicator"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 7L9 19l-5.5-5.5 1.41-1.41L9 16.17 19.59 5.59 21 7z"/></svg></div>' : '') +
+                            '</div>' +
+                            '<span class="moonfin-similar-title">' + (feature.Name || 'Feature') + '</span>' +
+                        '</div>';
+                    }).join('') +
+                '</div>' +
+            '</div>'
+        ) : '';
+
+        var collectionTitle = collections && collections.title ? collections.title : 'Collection';
+        var collectionItems = collections && collections.items ? collections.items : [];
+        var collectionsHtml = collectionItems.length > 0 ? (
+            '<div class="moonfin-section">' +
+                '<div class="moonfin-section-header">' +
+                    '<h3 class="moonfin-section-title">' + collectionTitle + '</h3>' +
+                    arrowsHtml +
+                '</div>' +
+                '<div class="moonfin-section-scroll">' +
+                    collectionItems.slice(0, 30).map(function(col) {
+                        var colPosterTag = col.ImageTags ? (col.ImageTags.Primary || col.ImageTags.Thumb) : null;
+                        var colPosterUrl = colPosterTag ? serverUrl + '/Items/' + col.Id + '/Images/Primary?maxHeight=400&quality=80' : '';
+                        var colWatched = col.UserData && col.UserData.Played;
+                        return '<div class="moonfin-similar-card moonfin-focusable" data-item-id="' + col.Id + '" data-type="' + (col.Type || '') + '" tabindex="0">' +
+                            '<div class="moonfin-similar-poster">' +
+                                (colPosterUrl ? '<img src="' + colPosterUrl + '" alt="" loading="lazy">' : '') +
+                                (colWatched ? '<div class="moonfin-watched-indicator"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 7L9 19l-5.5-5.5 1.41-1.41L9 16.17 19.59 5.59 21 7z"/></svg></div>' : '') +
+                            '</div>' +
+                            '<span class="moonfin-similar-title">' + (col.Name || '') + '</span>' +
+                        '</div>';
+                    }).join('') +
+                '</div>' +
+            '</div>'
+        ) : '';
+
         var backdrop = this.container.querySelector('.moonfin-details-backdrop');
         if (backdrop) {
             backdrop.style.backgroundImage = 'url(\'' + backdropUrl + '\')';
@@ -733,8 +935,11 @@ var Details = {
                 metadataHtml +
                 
                 '<div class="moonfin-sections">' +
+                    collectionsHtml +
                     seasonsHtml +
                     episodesHtml +
+                    chaptersHtml +
+                    featuresHtml +
                     
                     (cast.length > 0 ? 
                         '<div class="moonfin-section">' +
@@ -803,6 +1008,21 @@ var Details = {
         var hours = Math.floor(minutes / 60);
         var mins = minutes % 60;
         return mins > 0 ? hours + 'h ' + mins + 'm' : hours + 'h';
+    },
+
+    formatTimePosition: function(ticks) {
+        var totalSeconds = Math.floor((ticks || 0) / 10000000);
+        var hours = Math.floor(totalSeconds / 3600);
+        var minutes = Math.floor((totalSeconds % 3600) / 60);
+        var seconds = totalSeconds % 60;
+
+        var mm = minutes < 10 ? '0' + minutes : '' + minutes;
+        var ss = seconds < 10 ? '0' + seconds : '' + seconds;
+        if (hours > 0) {
+            var hh = hours < 10 ? '0' + hours : '' + hours;
+            return hh + ':' + mm + ':' + ss;
+        }
+        return mm + ':' + ss;
     },
 
     toggleFavorite: function(item) {
@@ -915,6 +1135,18 @@ var Details = {
                     self.showDetails(epId, 'Episode');
                 });
             })(episodeCards[n]);
+        }
+
+        var chapterCards = panel.querySelectorAll('.moonfin-chapter-card');
+        for (var o = 0; o < chapterCards.length; o++) {
+            (function(card) {
+                card.addEventListener('click', function() {
+                    var startTicks = parseInt(card.getAttribute('data-start-ticks') || '0', 10);
+                    if (isNaN(startTicks)) startTicks = 0;
+                    self.hide(true);
+                    self.playItem(item.Id, startTicks, self._selectedAudioIndex, self._selectedSubtitleIndex, self._selectedMediaSourceId);
+                });
+            })(chapterCards[o]);
         }
 
         var personCards = panel.querySelectorAll('.moonfin-cast-card');
