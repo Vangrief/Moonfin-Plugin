@@ -28,12 +28,12 @@ public class JellyseerrProxyController : ControllerBase
     }
 
     /// <summary>
-    /// Authenticate with Jellyseerr using Jellyfin credentials.
+    /// Authenticate with Seerr using Jellyfin credentials.
     /// The session cookie is stored server-side and associated with the Jellyfin user.
     /// Any Moonfin client can then proxy requests through this plugin.
     /// </summary>
-    /// <param name="request">Jellyfin credentials for Jellyseerr auth.</param>
-    /// <returns>Authentication result with Jellyseerr user info.</returns>
+    /// <param name="request">Jellyfin credentials for Seerr auth.</param>
+    /// <returns>Authentication result with Seerr user info.</returns>
     [HttpPost("Login")]
     [Authorize]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -47,7 +47,7 @@ public class JellyseerrProxyController : ControllerBase
         if (config?.JellyseerrEnabled != true || string.IsNullOrEmpty(jellyseerrUrl))
         {
             return StatusCode(StatusCodes.Status503ServiceUnavailable,
-                new { error = "Jellyseerr integration is not enabled" });
+                new { error = "Seerr integration is not enabled" });
         }
 
         var userId = this.GetUserIdFromClaims();
@@ -85,7 +85,7 @@ public class JellyseerrProxyController : ControllerBase
     }
 
     /// <summary>
-    /// Check the current user's Jellyseerr SSO session status.
+    /// Check the current user's Seerr SSO session status.
     /// </summary>
     /// <returns>Session status including whether authenticated and user info.</returns>
     [HttpGet("Status")]
@@ -133,7 +133,7 @@ public class JellyseerrProxyController : ControllerBase
     }
 
     /// <summary>
-    /// Validate the current session is still active with Jellyseerr.
+    /// Validate the current session is still active with Seerr.
     /// </summary>
     /// <returns>Whether the session is valid.</returns>
     [HttpGet("Validate")]
@@ -157,7 +157,7 @@ public class JellyseerrProxyController : ControllerBase
     }
 
     /// <summary>
-    /// Clear the current user's Jellyseerr SSO session.
+    /// Clear the current user's Seerr SSO session.
     /// </summary>
     [HttpDelete("Logout")]
     [Authorize]
@@ -170,20 +170,18 @@ public class JellyseerrProxyController : ControllerBase
             return Unauthorized(new { error = "User not authenticated" });
         }
 
-        // Proxy a logout to Jellyseerr first
         await _sessionService.ProxyRequestAsync(
             userId.Value,
             HttpMethod.Post,
             "auth/logout");
 
-        // Then clear our stored session
         await _sessionService.ClearSessionAsync(userId.Value);
 
-        return Ok(new { success = true, message = "Logged out from Jellyseerr" });
+        return Ok(new { success = true, message = "Logged out from Seerr" });
     }
 
     /// <summary>
-    /// Proxy GET requests to Jellyseerr API.
+    /// Proxy GET requests to Seerr API.
     /// Path is relative to /api/v1/ (e.g., "auth/me", "request", "search?query=foo").
     /// </summary>
     [HttpGet("Api/{**path}")]
@@ -195,7 +193,7 @@ public class JellyseerrProxyController : ControllerBase
     }
 
     /// <summary>
-    /// Proxy POST requests to Jellyseerr API.
+    /// Proxy POST requests to Seerr API.
     /// </summary>
     [HttpPost("Api/{**path}")]
     [Authorize]
@@ -206,7 +204,7 @@ public class JellyseerrProxyController : ControllerBase
     }
 
     /// <summary>
-    /// Proxy PUT requests to Jellyseerr API.
+    /// Proxy PUT requests to Seerr API.
     /// </summary>
     [HttpPut("Api/{**path}")]
     [Authorize]
@@ -217,7 +215,7 @@ public class JellyseerrProxyController : ControllerBase
     }
 
     /// <summary>
-    /// Proxy DELETE requests to Jellyseerr API.
+    /// Proxy DELETE requests to Seerr API.
     /// </summary>
     [HttpDelete("Api/{**path}")]
     [Authorize]
@@ -234,7 +232,7 @@ public class JellyseerrProxyController : ControllerBase
         if (config?.JellyseerrEnabled != true || string.IsNullOrEmpty(jellyseerrUrl))
         {
             return StatusCode(StatusCodes.Status503ServiceUnavailable,
-                new { error = "Jellyseerr integration is not enabled" });
+                new { error = "Seerr integration is not enabled" });
         }
 
         var userId = this.GetUserIdFromClaims();
@@ -268,7 +266,7 @@ public class JellyseerrProxyController : ControllerBase
             : null);
     }
 
-    // ── Jellyseerr Web Proxy (iframe auth) ──────────────────────────────
+    // ── Seerr Web Proxy (iframe auth) ──────────────────────────────
 
     private const string ProxyBasePath = "/Moonfin/Jellyseerr/Web";
 
@@ -277,8 +275,8 @@ public class JellyseerrProxyController : ControllerBase
     private static readonly ConcurrentDictionary<string, (Guid UserId, DateTimeOffset Expiry)> _proxySessions = new();
 
     /// <summary>
-    /// Proxies Jellyseerr web content through the Jellyfin server, injecting the stored
-    /// SSO session cookie. This allows the Jellyseerr iframe to be pre-authenticated.
+    /// Proxies Seerr web content through the Jellyfin server, injecting the stored
+    /// SSO session cookie. This allows the Seerr iframe to be pre-authenticated.
     /// The first request must include api_key for Jellyfin auth; a proxy session cookie is
     /// then set so subsequent resource loads (scripts, styles, etc.) don't need it.
     /// </summary>
@@ -312,7 +310,6 @@ public class JellyseerrProxyController : ControllerBase
             contentType = Request.ContentType;
         }
 
-        // Strip api_key from query string before forwarding to Jellyseerr
         var queryString = StripQueryParam(Request.QueryString.Value, "api_key");
 
         var result = await _sessionService.ProxyWebRequestAsync(
@@ -328,15 +325,16 @@ public class JellyseerrProxyController : ControllerBase
             return StatusCode(result.StatusCode);
         }
 
-        // For HTML responses, rewrite absolute paths and inject proxy script
         if (result.ContentType.Contains("text/html", StringComparison.OrdinalIgnoreCase))
         {
+            var config = MoonfinPlugin.Instance?.Configuration;
+            var configuredPublicUrl = config?.JellyseerrUrl?.TrimEnd('/') ?? string.Empty;
+            var assetBaseHref = ResolveAssetBaseHref(configuredPublicUrl);
             var html = Encoding.UTF8.GetString(result.Body);
-            html = RewriteHtmlForProxy(html);
+            html = RewriteHtmlForProxy(html, assetBaseHref);
             return Content(html, "text/html; charset=utf-8");
         }
 
-        // For CSS responses, rewrite url() and @import references
         if (result.ContentType.Contains("text/css", StringComparison.OrdinalIgnoreCase))
         {
             var css = Encoding.UTF8.GetString(result.Body);
@@ -418,25 +416,72 @@ public class JellyseerrProxyController : ControllerBase
         return parts.Length > 0 ? "?" + string.Join("&", parts) : null;
     }
 
-    private static string RewriteHtmlForProxy(string html)
+    private string ResolveAssetBaseHref(string configuredPublicUrl)
     {
-        // Rewrite absolute paths in src, href, action, srcset attributes
-        // Matches: src="/ but not src="// (protocol-relative) or already-proxied paths
-        html = Regex.Replace(html,
-            @"((?:src|href|action|srcset)\s*=\s*"")\/(?!\/|Moonfin)",
-            $"$1{ProxyBasePath}/");
-        html = Regex.Replace(html,
-            @"((?:src|href|action|srcset)\s*=\s*')\/(?!\/|Moonfin)",
-            $"$1{ProxyBasePath}/");
+        // Cross-origin asset bases (e.g., Jellyfin at :8096, Seerr at :5055) can fail
+        // for fonts/CSP/history in iframe contexts. In that case, keep assets on proxy.
+        if (string.IsNullOrEmpty(configuredPublicUrl))
+        {
+            return ProxyBasePath + "/";
+        }
 
-        // Inject proxy URL rewriter script after <head>
+        if (!Uri.TryCreate(configuredPublicUrl, UriKind.Absolute, out var configuredUri))
+        {
+            return ProxyBasePath + "/";
+        }
+
+        if (!IsSameOrigin(configuredUri, Request.Scheme, Request.Host))
+        {
+            return ProxyBasePath + "/";
+        }
+
+        return configuredPublicUrl + "/";
+    }
+
+    private static bool IsSameOrigin(Uri uri, string requestScheme, HostString requestHost)
+    {
+        if (!string.Equals(uri.Scheme, requestScheme, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!string.Equals(uri.Host, requestHost.Host, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var expectedPort = requestHost.Port ?? (string.Equals(requestScheme, "https", StringComparison.OrdinalIgnoreCase) ? 443 : 80);
+        return uri.Port == expectedPort;
+    }
+
+    private static string RewriteHtmlForProxy(string html, string assetBaseHref)
+    {
+        html = Regex.Replace(
+            html,
+            "(?<attr>\\b(?:src|href)\\s*=\\s*[\"'])/(?!(?:/|Moonfin/))",
+            "$1" + ProxyBasePath + "/",
+            RegexOptions.IgnoreCase);
+
+        html = html
+            .Replace("\\/_next\\/", "\\/Moonfin\\/Jellyseerr\\/Web\\/_next\\/", StringComparison.Ordinal)
+            .Replace("\"/_next/", $"\"{ProxyBasePath}/_next/", StringComparison.Ordinal)
+            .Replace("'/_next/", $"'{ProxyBasePath}/_next/", StringComparison.Ordinal)
+            .Replace("=/_next/", $"={ProxyBasePath}/_next/", StringComparison.Ordinal)
+            .Replace("\\/imageproxy\\/", "\\/Moonfin\\/Jellyseerr\\/Web\\/imageproxy\\/", StringComparison.Ordinal)
+            .Replace("\"/imageproxy/", $"\"{ProxyBasePath}/imageproxy/", StringComparison.Ordinal)
+            .Replace("'/imageproxy/", $"'{ProxyBasePath}/imageproxy/", StringComparison.Ordinal)
+            .Replace("=/imageproxy/", $"={ProxyBasePath}/imageproxy/", StringComparison.Ordinal);
+
         var headIdx = html.IndexOf("<head", StringComparison.OrdinalIgnoreCase);
         if (headIdx >= 0)
         {
             var closeIdx = html.IndexOf('>', headIdx);
             if (closeIdx >= 0)
             {
-                html = html.Insert(closeIdx + 1, ProxyScript);
+                var baseTag = !string.IsNullOrEmpty(assetBaseHref)
+                    ? $"<base href=\"{assetBaseHref}\">"
+                    : string.Empty;
+                html = html.Insert(closeIdx + 1, baseTag + ProxyScript);
             }
         }
 
@@ -445,38 +490,85 @@ public class JellyseerrProxyController : ControllerBase
 
     private static string RewriteCssForProxy(string css)
     {
-        // Rewrite absolute url() references: url('/path') → url('/Moonfin/Jellyseerr/Web/path')
-        css = Regex.Replace(css,
-            @"url\(\s*(['""]?)\/(?!\/|Moonfin)",
-            $"url($1{ProxyBasePath}/");
+        css = Regex.Replace(
+            css,
+            "url\\(\\s*(['\\\"]?)\\/(?!\\/|Moonfin\\/)",
+            $"url($1{ProxyBasePath}/",
+            RegexOptions.IgnoreCase);
 
-        // Rewrite @import with absolute paths
-        css = Regex.Replace(css,
-            @"@import\s+(['""])\/(?!\/|Moonfin)",
-            $"@import $1{ProxyBasePath}/");
+        css = Regex.Replace(
+            css,
+            "@import\\s+(['\\\"])\\/(?!\\/|Moonfin\\/)",
+            $"@import $1{ProxyBasePath}/",
+            RegexOptions.IgnoreCase);
 
         return css;
     }
 
+    // Intercepts fetch/XHR/history and rewrites static asset/navigation URLs for proxy mode.
     private const string ProxyScript = @"<script data-moonfin-proxy>(function(){
 var b='/Moonfin/Jellyseerr/Web';
-function r(v){return typeof v==='string'&&v[0]==='/'&&v[1]!=='/'&&v.indexOf(b)!==0?b+v:v}
-var F=window.fetch;window.fetch=function(u,o){if(typeof u==='string')return F.call(this,r(u),o);if(u instanceof Request){var u2=new Request(r(u.url),u);return F.call(this,u2,o)}return F.call(this,u,o)};
+function r(v){return typeof v==='string'&&v.length>1&&v[0]==='/'&&v[1]!=='/'&&v.indexOf(b)!==0?b+v:v}
+
+var F=window.fetch;window.fetch=function(u,o){if(typeof u==='string')return F.call(this,r(u),o);if(u instanceof Request)return F.call(this,new Request(r(u.url),u),o);return F.call(this,u,o)};
+
 var X=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(){if(typeof arguments[1]==='string')arguments[1]=r(arguments[1]);return X.apply(this,arguments)};
-var S=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,v){if(n==='src'||n==='href'||n==='action')v=r(v);return S.call(this,n,v)};
-function P(p,n){var d=Object.getOwnPropertyDescriptor(p,n);if(d&&d.set)Object.defineProperty(p,n,{set:function(v){d.set.call(this,r(v))},get:d.get,configurable:true,enumerable:d.enumerable})}try{P(HTMLScriptElement.prototype,'src');P(HTMLImageElement.prototype,'src');P(HTMLSourceElement.prototype,'src');P(HTMLLinkElement.prototype,'href')}catch(e){}
-var HP=history.pushState.bind(history);history.pushState=function(s,t,u){return HP(s,t,r(u))};var HR=history.replaceState.bind(history);history.replaceState=function(s,t,u){return HR(s,t,r(u))};
-document.addEventListener('click',function(e){if(e.defaultPrevented)return;var a=e.target&&e.target.closest?e.target.closest('a[href]'):null;if(!a)return;var h=a.getAttribute('href');if(h&&h[0]==='/'&&h[1]!=='/'&&h.indexOf(b)!==0){S.call(a,'href',b+h)}});
-new MutationObserver(function(ms){ms.forEach(function(m){m.addedNodes.forEach(function(n){if(n.nodeType!==1)return;var fix=function(e){['src','href'].forEach(function(a){var v=e.getAttribute(a);if(v&&v[0]==='/'&&v[1]!=='/'&&v.indexOf(b)!==0)S.call(e,a,b+v)})};fix(n);if(n.querySelectorAll)n.querySelectorAll('[src],[href]').forEach(fix)})})}).observe(document.documentElement,{childList:true,subtree:true});
+
+var HP=history.pushState.bind(history);history.pushState=function(s,t,u){return HP(s,t,r(u))};
+var HR=history.replaceState.bind(history);history.replaceState=function(s,t,u){return HR(s,t,r(u))};
+
+var rewriteAttr=function(el,attr){var v=el.getAttribute(attr);if(v)el.setAttribute(attr,r(v))};
+var scriptEls=document.getElementsByTagName('script');for(var i=0;i<scriptEls.length;i++)rewriteAttr(scriptEls[i],'src');
+var linkEls=document.getElementsByTagName('link');for(var i=0;i<linkEls.length;i++)rewriteAttr(linkEls[i],'href');
+var imgEls=document.getElementsByTagName('img');for(var i=0;i<imgEls.length;i++)rewriteAttr(imgEls[i],'src');
+
+try{
+    var d=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'src');
+    if(d&&d.set){
+        Object.defineProperty(HTMLImageElement.prototype,'src',{
+            get:d.get,
+            set:function(v){d.set.call(this,r(v))},
+            enumerable:d.enumerable,
+            configurable:true
+        });
+    }
+}catch(e){}
+
+var rewriteNode=function(n){
+    if(!n||n.nodeType!==1)return n;
+    if(n.tagName==='SCRIPT')rewriteAttr(n,'src');
+    else if(n.tagName==='LINK')rewriteAttr(n,'href');
+    else if(n.tagName==='IMG')rewriteAttr(n,'src');
+    else if(n.tagName==='A')rewriteAttr(n,'href');
+    return n;
+};
+var AC=Node.prototype.appendChild;
+Node.prototype.appendChild=function(n){return AC.call(this,rewriteNode(n))};
+var IB=Node.prototype.insertBefore;
+Node.prototype.insertBefore=function(n,rn){return IB.call(this,rewriteNode(n),rn)};
+
+document.addEventListener('click',function(e){
+    var n=e.target;
+    while(n&&n!==document){
+        if(n.tagName==='A'){
+            var h=n.getAttribute('href');
+            if(typeof h==='string'&&h.length>1&&h[0]==='/'&&h[1]!=='/'&&h.indexOf(b)!==0){
+                n.setAttribute('href',b+h);
+            }
+            break;
+        }
+        n=n.parentElement;
+    }
+},true);
 })()</script>";
 }
 
 /// <summary>
-/// Request body for Jellyseerr login.
+/// Request body for Seerr login.
 /// </summary>
 public class JellyseerrLoginRequest
 {
-    /// <summary>Username (Jellyfin or local Jellyseerr account).</summary>
+    /// <summary>Username (Jellyfin or local Seerr account).</summary>
     public string? Username { get; set; }
 
     /// <summary>Password.</summary>
@@ -484,7 +576,7 @@ public class JellyseerrLoginRequest
 
     /// <summary>
     /// Authentication type: "jellyfin" (default) or "local".
-    /// Determines which Jellyseerr auth endpoint is used.
+    /// Determines which Seerr auth endpoint is used.
     /// </summary>
     public string? AuthType { get; set; }
 }

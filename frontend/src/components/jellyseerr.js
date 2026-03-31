@@ -11,7 +11,7 @@ const Jellyseerr = {
     },
 
     getIcon(variant) {
-        return this.icons[variant] || this.icons.jellyseerr;
+        return this.icons[variant] || this.icons.seerr;
     },
 
     getProxyUrl() {
@@ -22,9 +22,6 @@ const Jellyseerr = {
     },
 
     getIframeUrl() {
-        if (this.config?.directUrl) {
-            return this.config.directUrl;
-        }
         return this.getProxyUrl() || this.config?.url;
     },
 
@@ -32,7 +29,6 @@ const Jellyseerr = {
         await this.fetchConfig();
         
         if (this.config?.enabled && this.config?.url) {
-            console.log('[Moonfin] ' + (this.config.displayName || 'Jellyseerr') + ' enabled:', this.config.url, '(variant:', this.config.variant + ')');
             await this.checkSsoStatus();
             window.dispatchEvent(new CustomEvent('moonfin-jellyseerr-config', { 
                 detail: this.config 
@@ -46,7 +42,6 @@ const Jellyseerr = {
             const token = window.ApiClient?.accessToken?.();
             
             if (!serverUrl || !token) {
-                console.log('[Moonfin] Cannot fetch Jellyseerr config - not authenticated');
                 return;
             }
 
@@ -68,7 +63,7 @@ const Jellyseerr = {
                 this.config = API.toCamelCase(await response.json());
             }
         } catch (e) {
-            console.error('[Moonfin] Failed to fetch Jellyseerr config:', e);
+            console.error('[Moonfin] Failed to fetch Seerr config:', e);
         }
     },
 
@@ -88,10 +83,9 @@ const Jellyseerr = {
 
             if (response.ok) {
                 this.ssoStatus = API.toCamelCase(await response.json());
-                console.log('[Moonfin] Jellyseerr SSO status:', this.ssoStatus.authenticated ? 'authenticated' : 'not authenticated');
             }
         } catch (e) {
-            console.error('[Moonfin] Failed to check Jellyseerr SSO status:', e);
+            console.error('[Moonfin] Failed to check Seerr SSO status:', e);
         }
     },
 
@@ -125,13 +119,12 @@ const Jellyseerr = {
                     avatar: result.avatar,
                     permissions: result.permissions
                 };
-                console.log('[Moonfin] Jellyseerr SSO login successful:', result.displayName);
                 return { success: true };
             }
             
             return { success: false, error: result.error || 'Authentication failed' };
         } catch (e) {
-            console.error('[Moonfin] Jellyseerr SSO login error:', e);
+            console.error('[Moonfin] Seerr SSO login error:', e);
             return { success: false, error: 'Connection error' };
         }
     },
@@ -151,9 +144,8 @@ const Jellyseerr = {
             });
 
             this.ssoStatus = { enabled: true, authenticated: false, url: this.config?.url };
-            console.log('[Moonfin] Jellyseerr SSO logged out');
         } catch (e) {
-            console.error('[Moonfin] Jellyseerr SSO logout error:', e);
+            console.error('[Moonfin] Seerr SSO logout error:', e);
         }
     },
 
@@ -190,13 +182,11 @@ const Jellyseerr = {
 
     open() {
         if (!this.config?.enabled || !this.config?.url) {
-            console.warn('[Moonfin] Jellyseerr not configured');
             return;
         }
 
         if (this.isOpen) return;
 
-        // Check SSO status - direct user to Settings if not authenticated
         if (!this.ssoStatus?.authenticated) {
             this.showSignInPrompt();
             return;
@@ -225,7 +215,7 @@ const Jellyseerr = {
         prompt.className = 'moonfin-jellyseerr-signin-prompt';
         prompt.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#1e1e2e; border:1px solid #555; border-radius:8px; padding:1.5em 2em; z-index:100001; text-align:center; color:#fff; box-shadow:0 4px 24px rgba(0,0,0,0.5);';
         prompt.innerHTML =
-            '<p style="margin:0 0 1em 0; font-size:1em;">Sign in to Jellyseerr in <strong>Moonfin Settings</strong> first.</p>' +
+            '<p style="margin:0 0 1em 0; font-size:1em;">Sign in to Seerr in <strong>Moonfin Settings</strong> first.</p>' +
             '<div style="display:flex; gap:0.5em; justify-content:center;">' +
                 '<button class="moonfin-prompt-settings-btn" style="padding:0.5em 1.5em; border:none; border-radius:4px; background:#6366f1; color:#fff; cursor:pointer; font-size:0.9em;">Open Settings</button>' +
                 '<button class="moonfin-prompt-close-btn" style="padding:0.5em 1.5em; border:none; border-radius:4px; background:#555; color:#fff; cursor:pointer; font-size:0.9em;">Close</button>' +
@@ -284,8 +274,8 @@ const Jellyseerr = {
         this.container = document.createElement('div');
         this.container.className = 'moonfin-jellyseerr-container';
         
-        var displayName = this.config?.displayName || 'Jellyseerr';
-        var variant = this.config?.variant || 'jellyseerr';
+        var displayName = this.config?.displayName || 'Seerr';
+        var variant = this.config?.variant || 'seerr';
         var ssoUser = this.ssoStatus?.displayName || '';
         var iframeSrc = this.getIframeUrl();
         var iconSvg = this.getIcon(variant);
@@ -306,11 +296,6 @@ const Jellyseerr = {
                     '<button class="moonfin-jellyseerr-btn moonfin-jellyseerr-external" title="Open in new tab">' +
                         '<svg viewBox="0 0 24 24" width="20" height="20">' +
                             '<path fill="currentColor" d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/>' +
-                        '</svg>' +
-                    '</button>' +
-                    '<button class="moonfin-jellyseerr-btn moonfin-jellyseerr-signout" title="Sign out of ' + displayName + '">' +
-                        '<svg viewBox="0 0 24 24" width="20" height="20">' +
-                            '<path fill="currentColor" d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>' +
                         '</svg>' +
                     '</button>' +
                     '<button class="moonfin-jellyseerr-btn moonfin-jellyseerr-close" title="Close">' +
@@ -351,13 +336,6 @@ const Jellyseerr = {
 
         this.container.querySelector('.moonfin-jellyseerr-external')?.addEventListener('click', function() {
             window.open(self.config.url, '_blank');
-        });
-
-        this.container.querySelector('.moonfin-jellyseerr-signout')?.addEventListener('click', function() {
-            if (confirm('Sign out of Jellyseerr? You will need to sign in again to use it.')) {
-                self.close();
-                self.ssoLogout();
-            }
         });
 
         this.iframe?.addEventListener('load', function() {

@@ -27,21 +27,23 @@
                     </div>
 
                     <div class="verticalSection">
-                        <h3 class="sectionTitle">Jellyseerr / Seerr Integration</h3>
+                        <h3 class="sectionTitle">Seerr Integration</h3>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
                                 <input type="checkbox" id="JellyseerrEnabled" is="emby-checkbox" />
-                                <span>Enable Jellyseerr / Seerr</span>
+                                <span>Enable Seerr</span>
                             </label>
                             <div class="fieldDescription">
-                                Enable Jellyseerr or Seerr integration for all users. Users can configure their own authentication method in their client settings.
+                                Enable Seerr integration for all users. Moonfin handles authentication through a server-side proxy so users can sign in once and stay authenticated across clients.
                             </div>
                         </div>
                         <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="JellyseerrUrl">Jellyseerr/Seerr URL</label>
-                            <input type="url" id="JellyseerrUrl" is="emby-input" placeholder="https://jellyseerr.example.com" />
+                            <label class="inputLabel inputLabelUnfocused" for="JellyseerrUrl">Seerr URL</label>
+                            <input type="url" id="JellyseerrUrl" is="emby-input" placeholder="https://seerr.example.com" />
                             <div class="fieldDescription">
-                                The URL of your Jellyseerr or Seerr instance. This URL is used for server-to-server API proxying.
+                                The URL Jellyfin can reach for your Seerr instance.
+                                Moonfin always uses the server-side proxy for iframe and API requests to keep SSO seamless.
+                                If Jellyfin is behind a reverse proxy, forward all <code>/Moonfin/</code> paths to Jellyfin.
                             </div>
                         </div>
                         <div class="inputContainer">
@@ -49,27 +51,15 @@
                             <input type="text" id="JellyseerrDisplayName" is="emby-input" placeholder="Auto-detected" />
                             <div class="fieldDescription">
                                 <strong>Optional override.</strong> The name shown in the UI (e.g., "Requests", "Media Requests").
-                                Leave blank to auto-detect "Jellyseerr" or "Seerr" based on the configured URL.
+                                Leave blank to auto-detect from the configured URL.
                                 The icon is always auto-detected regardless of this setting.
                             </div>
                         </div>
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="JellyseerrDirectUrl">Direct Iframe URL (Advanced)</label>
-                            <input type="url" id="JellyseerrDirectUrl" is="emby-input" placeholder="https://jellyseerr.yourdomain.com" />
-                            <div class="fieldDescription">
-                                <strong>Optional:</strong> When set, the client-side iframe loads directly from this URL
-                                instead of through the proxy. Use this if you're running Seerr v3 (Next.js) behind a reverse proxy
-                                and experiencing issues with the default proxy mode.
-                                <br><br>
-                                <strong>When to use:</strong> If Seerr works when accessed directly but not through Moonfin's proxy,
-                                set this to your public Seerr URL (e.g., <code>https://seerr.yourdomain.com</code>).
-                                SSO API calls will still go through the Jellyfin server.
-                            </div>
-                        </div>
                         <div style="background-color: rgba(0, 164, 220, 0.1); border-left: 4px solid #00a4dc; border-radius: 4px; padding: 1em 1.5em; margin: 1em 0;">
-                            <strong>SSO Proxy:</strong> When Jellyseerr is enabled, Moonfin provides single sign-on.
+                            <strong>SSO Proxy:</strong> When Seerr is enabled, Moonfin provides single sign-on.
                             Users authenticate once with their Jellyfin credentials, and the session is stored server-side.
-                            All Moonfin clients (web, Android, Roku, webOS, Tizen, etc) can access Jellyseerr through <code>/Moonfin/Jellyseerr/Api/</code>
+                            All Moonfin clients (web, Android, Roku, webOS, Tizen, etc) access Seerr through
+                            <code>/Moonfin/Jellyseerr/Web/</code> (iframe) and <code>/Moonfin/Jellyseerr/Api/</code> (API)
                             without re-authenticating.
                         </div>
                     </div>
@@ -280,7 +270,6 @@
                     document.querySelector('#EnableSettingsSync').checked = config.EnableSettingsSync;
                     document.querySelector('#JellyseerrEnabled').checked = config.JellyseerrEnabled;
                     document.querySelector('#JellyseerrUrl').value = config.JellyseerrUrl || '';
-                    document.querySelector('#JellyseerrDirectUrl').value = config.JellyseerrDirectUrl || '';
                     document.querySelector('#JellyseerrDisplayName').value = config.JellyseerrDisplayName || '';
                     document.querySelector('#MdblistApiKey').value = config.MdblistApiKey || '';
                     document.querySelector('#TmdbApiKey').value = config.TmdbApiKey || '';
@@ -441,7 +430,6 @@
                             config.EnableSettingsSync = document.querySelector('#EnableSettingsSync').checked;
                             config.JellyseerrEnabled = document.querySelector('#JellyseerrEnabled').checked;
                             config.JellyseerrUrl = document.querySelector('#JellyseerrUrl').value || null;
-                            config.JellyseerrDirectUrl = document.querySelector('#JellyseerrDirectUrl').value || null;
                             config.JellyseerrDisplayName = document.querySelector('#JellyseerrDisplayName').value || null;
                             config.MdblistApiKey = document.querySelector('#MdblistApiKey').value || null;
                             config.TmdbApiKey = document.querySelector('#TmdbApiKey').value || null;

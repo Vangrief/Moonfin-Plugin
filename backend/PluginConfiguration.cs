@@ -14,26 +14,19 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool EnableSettingsSync { get; set; } = true;
 
     /// <summary>
-    /// Enable Jellyseerr integration for all users.
+    /// Enable Seerr integration for all users.
     /// </summary>
     public bool JellyseerrEnabled { get; set; } = false;
 
     /// <summary>
-    /// Jellyseerr server URL (admin-configured, public-facing).
+    /// Seerr server URL for server-to-server communication from Jellyfin.
+    /// Example: http://seerr:5055 or http://192.168.50.20:5055
     /// </summary>
     public string? JellyseerrUrl { get; set; }
 
     /// <summary>
-    /// Direct URL for loading Jellyseerr/Seerr in iframe (optional).
-    /// Use this when Seerr v3 (Next.js) doesn't work behind a reverse proxy subpath.
-    /// When set, the iframe loads directly from this URL instead of through the proxy.
-    /// Example: https://jellyseerr.yourdomain.com
-    /// </summary>
-    public string? JellyseerrDirectUrl { get; set; }
-
-    /// <summary>
     /// Optional display name override (e.g., "Requests", "Media Requests").
-    /// Leave empty to auto-detect "Jellyseerr" or "Seerr" based on server version.
+    /// Leave empty to auto-detect based on server version.
     /// </summary>
     public string? JellyseerrDisplayName { get; set; }
 
@@ -57,7 +50,7 @@ public class PluginConfiguration : BasePluginConfiguration
     public MoonfinSettingsProfile? DefaultUserSettings { get; set; }
 
     /// <summary>
-    /// Gets the effective Jellyseerr URL for server-to-server communication.
+    /// Gets the effective Seerr URL for server-to-server communication.
     /// </summary>
     public string? GetEffectiveJellyseerrUrl()
     {

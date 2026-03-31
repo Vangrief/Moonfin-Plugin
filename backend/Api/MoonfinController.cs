@@ -971,7 +971,7 @@ public class MoonfinController : ControllerBase
     }
 
     /// <summary>
-    /// Gets the Jellyseerr configuration (admin URL + user enablement).
+    /// Gets the Seerr configuration (admin URL + user enablement).
     /// </summary>
     [HttpGet("Jellyseerr/Config")]
     [Authorize]
@@ -996,10 +996,9 @@ public class MoonfinController : ControllerBase
         var displayName = config?.JellyseerrDisplayName;
         if (string.IsNullOrWhiteSpace(displayName))
         {
-            displayName = variant == "seerr" ? "Seerr" : "Jellyseerr";
+            displayName = "Seerr";
         }
 
-        // Resolve Jellyseerr enabled from user's global profile
         var userJellyseerrEnabled = userSettings?.Global?.JellyseerrEnabled 
             ?? userSettings?.JellyseerrEnabled  // legacy v1
             ?? true;
@@ -1008,7 +1007,6 @@ public class MoonfinController : ControllerBase
         {
             Enabled = config?.JellyseerrEnabled ?? false,
             Url = config?.JellyseerrUrl,
-            DirectUrl = config?.JellyseerrDirectUrl,
             DisplayName = displayName,
             Variant = variant,
             UserEnabled = userJellyseerrEnabled
@@ -1016,14 +1014,14 @@ public class MoonfinController : ControllerBase
     }
     
     /// <summary>
-    /// Auto-detect whether the configured URL is Jellyseerr or Seerr by calling the status API.
+    /// Auto-detect whether the configured URL is Seerr or legacy Jellyseerr by calling the status API.
     /// Results are cached for 1 hour or until the URL changes.
     /// </summary>
     private async Task<string> DetectVariantAsync(string? jellyseerrUrl)
     {
         if (string.IsNullOrEmpty(jellyseerrUrl))
         {
-            return "jellyseerr";
+            return "seerr";
         }
         
         if (_cachedVariant != null && 
@@ -1044,7 +1042,7 @@ public class MoonfinController : ControllerBase
                 return _cachedVariant;
             }
             
-            var variant = "jellyseerr";
+            var variant = "seerr";
             
             try
             {
@@ -1114,15 +1112,14 @@ public class MoonfinPingResponse
 }
 
 /// <summary>
-/// Response for Jellyseerr configuration.
+/// Response for Seerr configuration.
 /// </summary>
 public class JellyseerrConfigResponse
 {
     public bool Enabled { get; set; }
     public string? Url { get; set; }
-    public string? DirectUrl { get; set; }
-    public string DisplayName { get; set; } = "Jellyseerr";
-    public string Variant { get; set; } = "jellyseerr";
+    public string DisplayName { get; set; } = "Seerr";
+    public string Variant { get; set; } = "seerr";
     public bool UserEnabled { get; set; }
 }
 

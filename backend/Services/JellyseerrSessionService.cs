@@ -7,9 +7,9 @@ using Microsoft.Extensions.Logging;
 namespace Moonfin.Server.Services;
 
 /// <summary>
-/// Manages per-user Jellyseerr session cookies for SSO.
+/// Manages per-user Seerr session cookies for SSO.
 /// Sessions are stored server-side so any Moonfin client
-/// can access Jellyseerr through the Jellyfin plugin without re-authenticating.
+/// can access Seerr through the Jellyfin plugin without re-authenticating.
 /// </summary>
 public class JellyseerrSessionService
 {
@@ -103,13 +103,13 @@ public class JellyseerrSessionService
     }
 
     /// <summary>
-    /// Authenticates a Jellyfin user with Jellyseerr and stores the session.
+    /// Authenticates a Jellyfin user with Seerr and stores the session.
     /// </summary>
     /// <param name="userId">The Jellyfin user ID.</param>
     /// <param name="username">The username.</param>
     /// <param name="password">The password.</param>
-    /// <param name="authType">Auth type: "jellyfin" (default) or "local" for a native Jellyseerr account.</param>
-    /// <returns>The authenticated Jellyseerr user info, or null on failure.</returns>
+    /// <param name="authType">Auth type: "jellyfin" (default) or "local" for a native Seerr account.</param>
+    /// <returns>The authenticated Seerr user info, or null on failure.</returns>
     public async Task<JellyseerrAuthResult?> AuthenticateAsync(Guid userId, string username, string? password, string? authType = null)
     {
         var config = MoonfinPlugin.Instance?.Configuration;
@@ -117,7 +117,7 @@ public class JellyseerrSessionService
 
         if (string.IsNullOrEmpty(jellyseerrUrl))
         {
-            _logger.LogError("Jellyseerr URL not configured");
+            _logger.LogError("Seerr URL not configured");
             return null;
         }
 
@@ -159,13 +159,13 @@ public class JellyseerrSessionService
             if (!response.IsSuccessStatusCode)
             {
                 var errorBody = await response.Content.ReadAsStringAsync();
-                _logger.LogWarning("Jellyseerr auth failed for user {Username}: {Status} - {Error}",
+                _logger.LogWarning("Seerr auth failed for user {Username}: {Status} - {Error}",
                     username, response.StatusCode, errorBody);
                 return new JellyseerrAuthResult
                 {
                     Success = false,
                     Error = response.StatusCode == HttpStatusCode.Forbidden
-                        ? "Access denied. Make sure you have a Jellyseerr account."
+                        ? "Access denied. Make sure you have a Seerr account."
                         : $"Authentication failed: {response.StatusCode}"
                 };
             }
@@ -198,11 +198,11 @@ public class JellyseerrSessionService
 
             if (string.IsNullOrEmpty(sessionCookie))
             {
-                _logger.LogWarning("No session cookie received from Jellyseerr for user {Username}", username);
+                _logger.LogWarning("No session cookie received from Seerr for user {Username}", username);
                 return new JellyseerrAuthResult
                 {
                     Success = false,
-                    Error = "No session cookie received from Jellyseerr"
+                    Error = "No session cookie received from Seerr"
                 };
             }
 
@@ -226,7 +226,7 @@ public class JellyseerrSessionService
 
             await SaveSessionAsync(session);
 
-            _logger.LogInformation("Jellyseerr SSO session created for user {Username} (Jellyfin: {UserId})",
+            _logger.LogInformation("Seerr SSO session created for user {Username} (Jellyfin: {UserId})",
                 username, userId);
 
             return new JellyseerrAuthResult
@@ -240,16 +240,16 @@ public class JellyseerrSessionService
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Failed to connect to Jellyseerr at {Url}", jellyseerrUrl);
+            _logger.LogError(ex, "Failed to connect to Seerr at {Url}", jellyseerrUrl);
             return new JellyseerrAuthResult
             {
                 Success = false,
-                Error = $"Cannot reach Jellyseerr: {ex.Message}"
+                Error = $"Cannot reach Seerr: {ex.Message}"
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error during Jellyseerr auth for user {Username}", username);
+            _logger.LogError(ex, "Unexpected error during Seerr auth for user {Username}", username);
             return new JellyseerrAuthResult
             {
                 Success = false,
@@ -268,7 +268,7 @@ public class JellyseerrSessionService
         {
             if (session != null)
             {
-                _logger.LogWarning("Jellyseerr session for user {UserId} has empty cookie, treating as invalid", userId);
+                _logger.LogWarning("Seerr session for user {UserId} has empty cookie, treating as invalid", userId);
             }
             return null;
         }
@@ -278,7 +278,7 @@ public class JellyseerrSessionService
             var isValid = await ValidateSessionAsync(session);
             if (!isValid)
             {
-                _logger.LogInformation("Jellyseerr session expired for user {UserId}, removing", userId);
+                _logger.LogInformation("Seerr session expired for user {UserId}, removing", userId);
                 await ClearSessionAsync(userId);
                 return null;
             }
@@ -288,7 +288,7 @@ public class JellyseerrSessionService
     }
 
     /// <summary>
-    /// Validates a stored session by calling Jellyseerr's /auth/me endpoint.
+    /// Validates a stored session by calling Seerr's /auth/me endpoint.
     /// </summary>
     private async Task<bool> ValidateSessionAsync(JellyseerrSession session)
     {
@@ -314,7 +314,6 @@ public class JellyseerrSessionService
 
             if (response.IsSuccessStatusCode)
             {
-                // Check if Jellyseerr rotated the session cookie
                 await CheckForRotatedCookieAsync(session, response, cookieContainer, jellyseerrUrl);
 
                 // Update last validated timestamp
@@ -327,13 +326,13 @@ public class JellyseerrSessionService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to validate Jellyseerr session for user {UserId}", session.JellyfinUserId);
+            _logger.LogWarning(ex, "Failed to validate Seerr session for user {UserId}", session.JellyfinUserId);
             return false;
         }
     }
 
     /// <summary>
-    /// Checks if Jellyseerr rotated the connect.sid cookie and updates the session if so.
+    /// Checks if Seerr rotated the connect.sid cookie and updates the session if so.
     /// Express.js with rolling sessions may issue a new cookie on every response.
     /// </summary>
     private async Task CheckForRotatedCookieAsync(
@@ -361,7 +360,7 @@ public class JellyseerrSessionService
 
         if (!string.IsNullOrEmpty(updatedCookie) && updatedCookie != session.SessionCookie)
         {
-            _logger.LogInformation("Jellyseerr rotated session cookie for user {UserId}, updating", session.JellyfinUserId);
+            _logger.LogInformation("Seerr rotated session cookie for user {UserId}, updating", session.JellyfinUserId);
             session.SessionCookie = updatedCookie;
             await SaveSessionAsync(session);
         }
@@ -376,7 +375,7 @@ public class JellyseerrSessionService
             if (File.Exists(path))
             {
                 File.Delete(path);
-                _logger.LogInformation("Jellyseerr session cleared for user {UserId}", userId);
+                _logger.LogInformation("Seerr session cleared for user {UserId}", userId);
             }
         }
         finally
@@ -386,7 +385,7 @@ public class JellyseerrSessionService
     }
 
     /// <summary>
-    /// Proxies an HTTP request to Jellyseerr with the user's stored session cookie.
+    /// Proxies an HTTP request to Seerr with the user's stored session cookie.
     /// </summary>
     /// <param name="userId">The Jellyfin user ID.</param>
     /// <param name="method">HTTP method.</param>
@@ -411,7 +410,7 @@ public class JellyseerrSessionService
             return new JellyseerrProxyResponse
             {
                 StatusCode = 503,
-                Body = JsonSerializer.SerializeToUtf8Bytes(new { error = "Jellyseerr URL not configured" }),
+                Body = JsonSerializer.SerializeToUtf8Bytes(new { error = "Seerr URL not configured" }),
                 ContentType = "application/json"
             };
         }
@@ -422,7 +421,7 @@ public class JellyseerrSessionService
             return new JellyseerrProxyResponse
             {
                 StatusCode = 401,
-                Body = JsonSerializer.SerializeToUtf8Bytes(new { error = "Not authenticated with Jellyseerr", code = "NO_SESSION" }),
+                Body = JsonSerializer.SerializeToUtf8Bytes(new { error = "Not authenticated with Seerr", code = "NO_SESSION" }),
                 ContentType = "application/json"
             };
         }
@@ -474,18 +473,17 @@ public class JellyseerrSessionService
             if (response.StatusCode == HttpStatusCode.Unauthorized ||
                 response.StatusCode == HttpStatusCode.Forbidden)
             {
-                _logger.LogInformation("Jellyseerr session expired for user {UserId}", userId);
+                _logger.LogInformation("Seerr session expired for user {UserId}", userId);
                 await ClearSessionAsync(userId);
 
                 return new JellyseerrProxyResponse
                 {
                     StatusCode = 401,
-                    Body = JsonSerializer.SerializeToUtf8Bytes(new { error = "Jellyseerr session expired", code = "SESSION_EXPIRED" }),
+                    Body = JsonSerializer.SerializeToUtf8Bytes(new { error = "Seerr session expired", code = "SESSION_EXPIRED" }),
                     ContentType = "application/json"
                 };
             }
 
-            // Check if Jellyseerr rotated the session cookie
             if (response.IsSuccessStatusCode)
             {
                 await CheckForRotatedCookieAsync(session, response, cookieContainer, jellyseerrUrl);
@@ -500,17 +498,17 @@ public class JellyseerrSessionService
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Failed to proxy request to Jellyseerr: {Path}", path);
+            _logger.LogError(ex, "Failed to proxy request to Seerr: {Path}", path);
             return new JellyseerrProxyResponse
             {
                 StatusCode = 502,
-                Body = JsonSerializer.SerializeToUtf8Bytes(new { error = $"Cannot reach Jellyseerr: {ex.Message}" }),
+                Body = JsonSerializer.SerializeToUtf8Bytes(new { error = $"Cannot reach Seerr: {ex.Message}" }),
                 ContentType = "application/json"
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error proxying to Jellyseerr: {Path}", path);
+            _logger.LogError(ex, "Unexpected error proxying to Seerr: {Path}", path);
             return new JellyseerrProxyResponse
             {
                 StatusCode = 500,
@@ -521,7 +519,7 @@ public class JellyseerrSessionService
     }
 
     /// <summary>
-    /// Proxies a raw HTTP request to Jellyseerr for web content (no /api/v1/ prefix).
+    /// Proxies a raw HTTP request to Seerr for web content (no /api/v1/ prefix).
     /// Session cookie is optional — if unavailable, the request proceeds without auth.
     /// </summary>
     public async Task<JellyseerrProxyResponse> ProxyWebRequestAsync(
@@ -540,7 +538,7 @@ public class JellyseerrSessionService
             return new JellyseerrProxyResponse
             {
                 StatusCode = 503,
-                Body = Encoding.UTF8.GetBytes("Jellyseerr not configured"),
+                Body = Encoding.UTF8.GetBytes("Seerr not configured"),
                 ContentType = "text/plain"
             };
         }
@@ -585,7 +583,6 @@ public class JellyseerrSessionService
             var responseBody = await response.Content.ReadAsByteArrayAsync();
             var responseContentType = response.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
 
-            // Check if Jellyseerr rotated the session cookie
             if (session != null && response.IsSuccessStatusCode)
             {
                 await CheckForRotatedCookieAsync(session, response, cookieContainer, jellyseerrUrl);
@@ -600,17 +597,17 @@ public class JellyseerrSessionService
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Failed to proxy web request to Jellyseerr: {Path}", path);
+            _logger.LogError(ex, "Failed to proxy web request to Seerr: {Path}", path);
             return new JellyseerrProxyResponse
             {
                 StatusCode = 502,
-                Body = Encoding.UTF8.GetBytes($"Cannot reach Jellyseerr: {ex.Message}"),
+                Body = Encoding.UTF8.GetBytes($"Cannot reach Seerr: {ex.Message}"),
                 ContentType = "text/plain"
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error proxying web request to Jellyseerr: {Path}", path);
+            _logger.LogError(ex, "Unexpected error proxying web request to Seerr: {Path}", path);
             return new JellyseerrProxyResponse
             {
                 StatusCode = 500,
@@ -648,7 +645,7 @@ public class JellyseerrSessionService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to load Jellyseerr session for user {UserId}", userId);
+            _logger.LogError(ex, "Failed to load Seerr session for user {UserId}", userId);
             return null;
         }
         finally
@@ -659,7 +656,7 @@ public class JellyseerrSessionService
 }
 
 /// <summary>
-/// Stored Jellyseerr session data for a Jellyfin user.
+/// Stored Seerr session data for a Jellyfin user.
 /// </summary>
 public class JellyseerrSession
 {
@@ -667,11 +664,11 @@ public class JellyseerrSession
     [JsonPropertyName("jellyfinUserId")]
     public Guid JellyfinUserId { get; set; }
 
-    /// <summary>The Jellyseerr connect.sid session cookie value.</summary>
+    /// <summary>The Seerr connect.sid session cookie value.</summary>
     [JsonPropertyName("sessionCookie")]
     public string SessionCookie { get; set; } = string.Empty;
 
-    /// <summary>The Jellyseerr internal user ID.</summary>
+    /// <summary>The Seerr internal user ID.</summary>
     [JsonPropertyName("jellyseerrUserId")]
     public int JellyseerrUserId { get; set; }
 
@@ -679,15 +676,15 @@ public class JellyseerrSession
     [JsonPropertyName("username")]
     public string Username { get; set; } = string.Empty;
 
-    /// <summary>Display name from Jellyseerr.</summary>
+    /// <summary>Display name from Seerr.</summary>
     [JsonPropertyName("displayName")]
     public string? DisplayName { get; set; }
 
-    /// <summary>Avatar URL from Jellyseerr.</summary>
+    /// <summary>Avatar URL from Seerr.</summary>
     [JsonPropertyName("avatar")]
     public string? Avatar { get; set; }
 
-    /// <summary>Jellyseerr permission bitmask.</summary>
+    /// <summary>Seerr permission bitmask.</summary>
     [JsonPropertyName("permissions")]
     public int Permissions { get; set; }
 
@@ -701,7 +698,7 @@ public class JellyseerrSession
 }
 
 /// <summary>
-/// Result of a Jellyseerr authentication attempt.
+/// Result of a Seerr authentication attempt.
 /// </summary>
 public class JellyseerrAuthResult
 {
@@ -711,21 +708,21 @@ public class JellyseerrAuthResult
     /// <summary>Error message if auth failed.</summary>
     public string? Error { get; set; }
 
-    /// <summary>Jellyseerr user ID if successful.</summary>
+    /// <summary>Seerr user ID if successful.</summary>
     public int JellyseerrUserId { get; set; }
 
-    /// <summary>Display name from Jellyseerr.</summary>
+    /// <summary>Display name from Seerr.</summary>
     public string? DisplayName { get; set; }
 
     /// <summary>Avatar URL.</summary>
     public string? Avatar { get; set; }
 
-    /// <summary>Jellyseerr permission bitmask.</summary>
+    /// <summary>Seerr permission bitmask.</summary>
     public int Permissions { get; set; }
 }
 
 /// <summary>
-/// Response from a proxied Jellyseerr request.
+/// Response from a proxied Seerr request.
 /// </summary>
 public class JellyseerrProxyResponse
 {

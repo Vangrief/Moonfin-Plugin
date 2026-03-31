@@ -429,7 +429,7 @@ var Settings = {
                         '<button type="button" class="moonfin-segmented-btn" data-auth-type="local">Local Account</button>' +
                     '</div>' +
                 '</div>' +
-                '<p class="moonfin-toggle-desc moonfin-jellyseerr-login-desc" style="margin:0 0 12px 0">Enter your Jellyfin credentials to sign in to Jellyseerr. Your session is stored on the server so all devices stay signed in.</p>' +
+                '<p class="moonfin-toggle-desc moonfin-jellyseerr-login-desc" style="margin:0 0 12px 0">Sign in to link Moonfin with your Seerr account. Moonfin uses this session for seamless in-app integration, so you do not need to log in again inside the Seerr view.</p>' +
                 '<div class="moonfin-jellyseerr-login-error" style="display:none"></div>' +
                 '<div style="margin-bottom:8px">' +
                     '<label class="moonfin-input-label moonfin-jellyseerr-username-label">Username</label>' +
@@ -442,7 +442,7 @@ var Settings = {
                 '<button class="moonfin-jellyseerr-settings-login-btn moonfin-panel-btn moonfin-panel-btn-primary">Sign In</button>' +
             '</div>' +
             '<div class="moonfin-jellyseerr-signedIn-group" style="display:none">' +
-                '<button class="moonfin-jellyseerr-settings-logout-btn moonfin-panel-btn moonfin-panel-btn-danger">Sign Out of Jellyseerr</button>' +
+                '<button class="moonfin-jellyseerr-settings-logout-btn moonfin-panel-btn moonfin-panel-btn-danger">Sign Out</button>' +
             '</div>';
 
         var mdblistSources = [
@@ -622,7 +622,7 @@ var Settings = {
                     this.createSection('', 'MDBList Ratings', mdblistContent) +
                     this.createSection('', 'Home Screen Rows', homeRowContent) +
                     '<div class="moonfin-settings-jellyseerr-wrapper" style="display:none">' +
-                        this.createSection('', 'Jellyseerr', jellyseerrContent) +
+                        this.createSection('', 'Seerr', jellyseerrContent) +
                     '</div>' +
                 '</div>' +
                 '<div class="moonfin-settings-footer">' +
@@ -748,7 +748,6 @@ var Settings = {
         // Always fetch fresh config to catch admin changes
         return Jellyseerr.fetchConfig().then(function() {
             if (!Jellyseerr.config || !Jellyseerr.config.enabled || !Jellyseerr.config.url) {
-                console.log('[Moonfin] Jellyseerr not configured, hiding section. Config:', Jellyseerr.config);
                 wrapper.style.display = 'none';
                 return;
             }
@@ -1107,8 +1106,8 @@ var Settings = {
                 var desc = wrapper.querySelector('.moonfin-jellyseerr-login-desc');
                 var usernameLabel = wrapper.querySelector('.moonfin-jellyseerr-username-label');
                 if (desc) desc.textContent = isLocal
-                    ? 'Enter your local Jellyseerr account credentials. Your session is stored on the server so all devices stay signed in.'
-                    : 'Enter your Jellyfin credentials to sign in to Jellyseerr. Your session is stored on the server so all devices stay signed in.';
+                    ? 'Enter your local Seerr account credentials. Your session is stored on the server so all devices stay signed in.'
+                    : 'Enter your Jellyfin credentials to sign in to Seerr. Your session is stored on the server so all devices stay signed in.';
                 if (usernameLabel) usernameLabel.textContent = isLocal ? 'Email' : 'Username';
                 var passwordField = wrapper.querySelector('#jellyseerr-settings-password');
                 if (passwordField) passwordField.placeholder = isLocal ? '' : 'Leave empty if no password';
@@ -1118,10 +1117,10 @@ var Settings = {
         var logoutBtn = this.dialog.querySelector('.moonfin-jellyseerr-settings-logout-btn');
         if (logoutBtn) {
             logoutBtn.addEventListener('click', function() {
-                if (confirm('Sign out of Jellyseerr? You will need to sign in again to use it.')) {
+                if (confirm('Sign out of Seerr? You will need to sign in again to use it.')) {
                     Jellyseerr.ssoLogout().then(function() {
                         self.updateJellyseerrSsoSection();
-                        self.showToast('Signed out of Jellyseerr');
+                        self.showToast('Signed out of Seerr');
                     });
                 }
             });
@@ -1162,7 +1161,7 @@ var Settings = {
         Jellyseerr.ssoLogin(usernameVal, passwordVal, authType).then(function(result) {
             if (result.success) {
                 self.updateJellyseerrSsoSection();
-                self.showToast('Signed in to Jellyseerr');
+                self.showToast('Signed in to Seerr');
             } else {
                 errorEl.textContent = result.error || 'Authentication failed';
                 errorEl.style.display = 'block';

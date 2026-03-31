@@ -112,7 +112,7 @@ Moonfin uses the [File Transformation](https://github.com/IAmParadox27/jellyfin-
 ### Admin Settings
 
 Jellyfin Dashboard → Administration → Plugins → **Moonfin** to configure:
-- Jellyseerr/Seerr URL, display name, and direct iframe URL
+- Seerr URL, display name, and enable/disable toggle
 - Shared MDBList and TMDB API keys (so individual users don't need their own)
 - **Default user settings** — set server-wide defaults for any user-facing setting; users who haven't customized a value inherit the admin default
 - Enable/disable settings sync globally
@@ -125,17 +125,9 @@ Settings support **device profiles**: a shared global profile plus optional over
 
 ### Reverse Proxy
 
-If you run Jellyfin behind a reverse proxy (e.g., Nginx, Caddy, Traefik), make sure your proxy is configured to forward all `/Moonfin/` paths to Jellyfin. Jellyseerr loads inside Jellyfin through a special path (`/Moonfin/Jellyseerr/Web/`). If your reverse proxy isn't set up to pass those paths through, the page can't load and you'll just see a black screen. Some proxies also add security headers that block embedded content from showing up.
+If you run Jellyfin behind a reverse proxy (e.g., Nginx, Caddy, Traefik), make sure your proxy forwards all `/Moonfin/` paths to Jellyfin. Seerr loads inside Jellyfin through the Moonfin proxy path (`/Moonfin/Jellyseerr/Web/`). If your reverse proxy does not pass these paths through, the page can fail to load (often a black screen).
 
-#### Seerr v3 (Next.js) Users
-
-Seerr v3 is built on Next.js, which can have issues when proxied through subpaths due to hardcoded asset paths and hydration mismatches. If you're experiencing problems with Seerr v3 loading through the proxy (blank screen, 404 errors on chunks, navigation issues), you can configure a **Direct Iframe URL** in the admin settings:
-
-1. Go to *Jellyfin Dashboard → Administration → Plugins → Moonfin*
-2. Set the **Jellyseerr URL** to your Seerr instance (used for API proxying)
-3. Set the **Direct Iframe URL** to your public Seerr URL (e.g., `https://seerr.yourdomain.com`)
-
-When the Direct Iframe URL is set, the iframe loads directly from that URL instead of through the Moonfin proxy. SSO API calls still go through the Jellyfin server, but the web UI comes directly from Seerr.
+Moonfin now uses a proxy-first Seerr integration: iframe and API traffic are routed through Jellyfin for seamless SSO. Some reverse proxies also add security headers (for example restrictive `frame-ancestors`/`X-Frame-Options` or CSP rules) that can block embedded content, so verify those headers if Seerr does not render.
 
 ## Building from Source
 
@@ -221,7 +213,6 @@ Output: `Moonfin.Server-{VERSION}.zip` in the repo root.
 {
   "enabled": true,
   "url": "https://seerr.example.com",
-  "directUrl": null,
   "displayName": "Seerr",
   "variant": "seerr",
   "userEnabled": true
@@ -230,10 +221,9 @@ Output: `Moonfin.Server-{VERSION}.zip` in the repo root.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `enabled` | bool | Whether Jellyseerr/Seerr is enabled by admin |
+| `enabled` | bool | Whether Seerr integration is enabled by admin |
 | `url` | string | Server URL (used for API proxying) |
-| `directUrl` | string? | Optional direct iframe URL for Seerr v3 subpath issues |
-| `displayName` | string | UI display name (admin override or auto: "Jellyseerr"/"Seerr") |
+| `displayName` | string | UI display name (admin override or auto-detected) |
 | `variant` | string | Auto-detected: `"jellyseerr"` (version < 3.0) or `"seerr"` (version ≥ 3.0) |
 | `userEnabled` | bool | Whether enabled in user's personal settings |
 
