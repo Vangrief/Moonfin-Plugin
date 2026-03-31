@@ -71,6 +71,9 @@ const Sidebar = {
         var existingTrigger = document.querySelector('.moonfin-sidebar-mobile-trigger');
         if (existingTrigger) existingTrigger.remove();
 
+        var existingDetailsBack = document.querySelector('.moonfin-details-sidebar-back');
+        if (existingDetailsBack) existingDetailsBack.remove();
+
         var settings = Storage.getAll();
 
         this.container = document.createElement('nav');
@@ -166,6 +169,16 @@ const Sidebar = {
         this.mobileTrigger.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>';
         this.mobileTrigger.title = 'Menu';
         document.body.appendChild(this.mobileTrigger);
+
+        var sidebarBack = document.createElement('button');
+        sidebarBack.className = 'moonfin-details-sidebar-back';
+        sidebarBack.innerHTML = '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>';
+        sidebarBack.title = 'Back';
+        sidebarBack.style.display = 'none';
+        sidebarBack.addEventListener('click', function() {
+            if (typeof Details !== 'undefined' && Details.isVisible) Details.goBack();
+        });
+        document.body.appendChild(sidebarBack);
 
         document.body.classList.add('moonfin-sidebar-active');
     },

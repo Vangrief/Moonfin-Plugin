@@ -7,6 +7,10 @@ const Navbar = {
     librariesExpanded: false,
     librariesTimeout: null,
 
+    getFallbackUserIconSvg: function() {
+        return '<svg class="moonfin-user-fallback-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="#FFFFFF"><path d="M372-523q-42-42-42-108t42-108q42-42 108-42t108 42q42 42 42 108t-42 108q-42 42-108 42t-108-42ZM160-160v-94q0-38 19-65t49-41q67-30 128.5-45T480-420q62 0 123 15.5T731-360q31 14 50 41t19 65v94H160Zm60-60h520v-34q0-16-9.5-30.5T707-306q-64-31-117-42.5T480-360q-57 0-111 11.5T252-306q-14 7-23 21.5t-9 30.5v34Zm324.5-346.5Q570-592 570-631t-25.5-64.5Q519-721 480-721t-64.5 25.5Q390-670 390-631t25.5 64.5Q441-541 480-541t64.5-25.5ZM480-631Zm0 411Z"/></svg>';
+    },
+
     isMobile: function() {
         return window.innerWidth <= 768;
     },
@@ -75,8 +79,11 @@ const Navbar = {
             '<div class="moonfin-navbar-left">',
             '    <button class="moonfin-user-btn" title="User Menu">',
             '        <div class="moonfin-user-avatar">',
-            '            <span class="moonfin-user-initial">U</span>',
+            '            ' + this.getFallbackUserIconSvg(),
             '        </div>',
+            '    </button>',
+            '    <button class="moonfin-details-nav-back" title="Back" style="display:none">',
+            '        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>',
             '    </button>',
             '</div>',
             '',
@@ -170,8 +177,7 @@ const Navbar = {
         if (avatarUrl) {
             avatarContainer.innerHTML = '<img src="' + avatarUrl + '" alt="' + (this.currentUser.Name || '') + '" class="moonfin-user-img">';
         } else {
-            var initial = (this.currentUser.Name && this.currentUser.Name[0]) || 'U';
-            avatarContainer.innerHTML = '<span class="moonfin-user-initial">' + initial + '</span>';
+            avatarContainer.innerHTML = this.getFallbackUserIconSvg();
         }
     },
 
@@ -288,6 +294,13 @@ const Navbar = {
                 if (Genres.isVisible) Genres.close();
                 if (Details.isVisible) Details.hide(true);
                 API.navigateTo('/mypreferencesmenu');
+            });
+        }
+
+        var navBack = this.container.querySelector('.moonfin-details-nav-back');
+        if (navBack) {
+            navBack.addEventListener('click', function() {
+                if (typeof Details !== 'undefined' && Details.isVisible) Details.goBack();
             });
         }
 

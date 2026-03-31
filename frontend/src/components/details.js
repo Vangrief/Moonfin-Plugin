@@ -2,6 +2,8 @@ var Details = {
     container: null,
     currentItem: null,
     isVisible: false,
+    _itemHistory: [],
+    _navigatingBack: false,
     _trailerOverlay: null,
     _trailerEscHandler: null,
     _trailerPreviousFocus: null,
@@ -211,23 +213,42 @@ var Details = {
         return null;
     },
 
+    goBack: function() {
+        if (this._itemHistory.length > 0) {
+            var prev = this._itemHistory.pop();
+            this._navigatingBack = true;
+            this.showDetails(prev.id, prev.type);
+            this._navigatingBack = false;
+        } else {
+            this.hide();
+        }
+    },
+
+    _updateBackButtons: function() {
+        var navbarBack = document.querySelector('.moonfin-details-nav-back');
+        var sidebarBack = document.querySelector('.moonfin-details-sidebar-back');
+        var show = this.isVisible;
+        if (navbarBack) navbarBack.style.display = show ? '' : 'none';
+        if (sidebarBack) sidebarBack.style.display = show ? '' : 'none';
+    },
+
     showDetails: function(itemId, itemType) {
         var self = this;
-        console.log('[Moonfin] Details: Loading item', itemId, itemType);
         this.closeTrailerOverlay();
 
         var api = API.getApiClient();
-        if (!api) {
-            console.error('[Moonfin] Details: No API client');
-            return;
-        }
+        if (!api) return;
 
-        // Only push history state when first opening (not when navigating within overlay)
         var wasAlreadyVisible = this.isVisible;
+
+        if (wasAlreadyVisible && this.currentItem && this.currentItem.Id && this.currentItem.Id !== itemId && !this._navigatingBack) {
+            this._itemHistory.push({ id: this.currentItem.Id, type: this.currentItem.Type });
+        }
 
         this.container.classList.add('visible');
         this.isVisible = true;
         document.body.classList.add('moonfin-details-visible');
+        this._updateBackButtons();
 
         if (!wasAlreadyVisible) {
             history.pushState({ moonfinDetails: true }, '');
@@ -3014,9 +3035,10 @@ var Details = {
         this.container.classList.remove('visible');
         this.isVisible = false;
         this.currentItem = null;
+        this._itemHistory = [];
         document.body.classList.remove('moonfin-details-visible');
+        this._updateBackButtons();
 
-        // Pop the history entry we pushed, unless caller will handle navigation
         if (!skipHistoryBack) {
             try { history.back(); } catch(e) {}
         }

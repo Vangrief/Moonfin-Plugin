@@ -6,7 +6,6 @@
 
 body.moonfin-navbar-active {
     padding-top: 80px !important;
-    background: linear-gradient(to bottom, black 60%, transparent) !important;
 }
 
 body.moonfin-navbar-active .skinHeader {
@@ -39,6 +38,40 @@ body.moonfin-navbar-active .cardOverlayContainer {
 .moonfin-navbar-left {
     flex: 0 0 auto;
     margin-right: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.moonfin-details-nav-back {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.85);
+    transition: background 0.2s, transform 0.2s;
+    outline: none;
+}
+
+.moonfin-details-nav-back svg {
+    width: 20px;
+    height: 20px;
+}
+
+.moonfin-details-nav-back:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+}
+
+.moonfin-details-nav-back:focus {
+    outline: 2px solid #00a4dc;
+    outline-offset: 2px;
 }
 
 .moonfin-user-btn {
@@ -78,11 +111,10 @@ body.moonfin-navbar-active .cardOverlayContainer {
     object-fit: cover;
 }
 
-.moonfin-user-initial {
-    font-size: 22px;
-    font-weight: 600;
-    color: #fff;
-    line-height: 1;
+.moonfin-user-fallback-icon {
+    width: 28px;
+    height: 28px;
+    display: block;
 }
 
 .moonfin-navbar-center {
@@ -314,13 +346,19 @@ body.moonfin-navbar-active .cardOverlayContainer {
         height: 36px;
     }
 
+    .moonfin-details-nav-back {
+        width: 36px;
+        height: 36px;
+    }
+
     .moonfin-user-img {
         width: 36px;
         height: 36px;
     }
 
-    .moonfin-user-initial {
-        font-size: 18px;
+    .moonfin-user-fallback-icon {
+        width: 22px;
+        height: 22px;
     }
 
     .moonfin-navbar-right {
