@@ -1,4 +1,5 @@
 using System.Net.Mime;
+using System.Reflection;
 using System.Text.Json;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
@@ -33,6 +34,10 @@ public class MoonfinController : ControllerBase
     private static string? _cachedVariantUrl;
     private static DateTime _variantCacheExpiry = DateTime.MinValue;
     private static readonly SemaphoreSlim _variantLock = new(1, 1);
+    private static readonly Type? _userManagerType = Type.GetType("MediaBrowser.Controller.Library.IUserManager, MediaBrowser.Controller");
+    private static readonly MethodInfo? _userManagerGetUserById = _userManagerType?.GetMethod("GetUserById", [typeof(Guid)]);
+    private static readonly MethodInfo? _internalItemsQuerySetUser = typeof(InternalItemsQuery).GetMethod("SetUser", BindingFlags.Public | BindingFlags.Instance);
+    private static readonly PropertyInfo? _internalItemsQueryUserProperty = typeof(InternalItemsQuery).GetProperty(nameof(InternalItemsQuery.User), BindingFlags.Public | BindingFlags.Instance);
 
     public MoonfinController(
         MoonfinSettingsService settingsService,
@@ -710,19 +715,32 @@ public class MoonfinController : ControllerBase
         var sourceType = settings.MediaBarSourceType ?? "library";
         var limit = settings.MediaBarItemCount ?? 10;
         var excludedGenres = settings.MediaBarExcludedGenres;
+        var queryUser = ResolveQueryUser(userId.Value);
+
+        if (queryUser == null)
+        {
+            return Ok(new
+            {
+                Items = Array.Empty<object>(),
+                TotalRecordCount = 0
+            });
+        }
 
         List<BaseItem> items;
 
         if (sourceType == "collection" && settings.MediaBarCollectionIds is { Count: > 0 })
         {
-            items = GetCollectionItems(settings.MediaBarCollectionIds, limit, excludedGenres);
+            items = GetCollectionItems(settings.MediaBarCollectionIds, limit, queryUser, excludedGenres);
         }
         else
         {
-            items = GetLibraryItems(settings.MediaBarLibraryIds, limit, excludedGenres);
+            items = GetLibraryItems(settings.MediaBarLibraryIds, limit, queryUser, excludedGenres);
         }
 
-        var dtos = items.Select(MapItemToDto).ToList();
+        var dtos = items
+            .Where(HasBackdropImage)
+            .Select(MapItemToDto)
+            .ToList();
 
         return Ok(new
         {
@@ -773,6 +791,78 @@ public class MoonfinController : ControllerBase
             ImageTags = imageTags,
             BackdropImageTags = backdropTags
         };
+    }
+
+    private static bool HasBackdropImage(BaseItem item)
+    {
+        return item.GetImageInfo(ImageType.Backdrop, 0) != null;
+    }
+
+    private object? ResolveQueryUser(Guid userId)
+    {
+        if (_userManagerType == null || _userManagerGetUserById == null)
+        {
+            return null;
+        }
+
+        var userManager = HttpContext?.RequestServices.GetService(_userManagerType);
+        if (userManager == null)
+        {
+            return null;
+        }
+
+        return _userManagerGetUserById.Invoke(userManager, [userId]);
+    }
+
+    private static bool TryApplyQueryUser(InternalItemsQuery query, object queryUser)
+    {
+        if (_internalItemsQuerySetUser != null)
+        {
+            try
+            {
+                _internalItemsQuerySetUser.Invoke(query, [queryUser]);
+                return true;
+            }
+            catch
+            {
+            }
+        }
+
+        return TrySetQueryUserProperty(query, queryUser);
+    }
+
+    private static bool TrySetQueryUserProperty(InternalItemsQuery query, object queryUser)
+    {
+        if (_internalItemsQueryUserProperty?.CanWrite != true || !_internalItemsQueryUserProperty.PropertyType.IsInstanceOfType(queryUser))
+        {
+            return false;
+        }
+
+        try
+        {
+            _internalItemsQueryUserProperty.SetValue(query, queryUser);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private BaseItem? GetItemByIdForUser(Guid itemId, object queryUser)
+    {
+        var query = new InternalItemsQuery
+        {
+            ItemIds = [itemId],
+            Limit = 1
+        };
+
+        if (!TryApplyQueryUser(query, queryUser))
+        {
+            return null;
+        }
+
+        return _libraryManager.GetItemsResult(query).Items.FirstOrDefault(i => i.Id == itemId);
     }
 
     /// <summary>
@@ -839,7 +929,7 @@ public class MoonfinController : ControllerBase
     /// Queries random Movie/Series items, optionally filtered to specific libraries
     /// and with genre exclusions applied at the database level.
     /// </summary>
-    private List<BaseItem> GetLibraryItems(List<string>? libraryIds, int limit, List<string>? excludedGenreIds = null)
+    private List<BaseItem> GetLibraryItems(List<string>? libraryIds, int limit, object queryUser, List<string>? excludedGenreIds = null)
     {
         var includedGenreIds = GetIncludedGenreIds(excludedGenreIds);
 
@@ -857,6 +947,8 @@ public class MoonfinController : ControllerBase
             };
 
             if (includedGenreIds != null) query.GenreIds = includedGenreIds;
+
+            if (!TryApplyQueryUser(query, queryUser)) return [];
 
             SetRandomOrder(query);
             return _libraryManager.GetItemsResult(query).Items.ToList();
@@ -882,6 +974,8 @@ public class MoonfinController : ControllerBase
             };
 
             if (includedGenreIds != null) query.GenreIds = includedGenreIds;
+
+            if (!TryApplyQueryUser(query, queryUser)) return [];
 
             SetRandomOrder(query);
 
@@ -935,7 +1029,7 @@ public class MoonfinController : ControllerBase
     /// Queries items from specified collections/playlists, filtered to Movie/Series.
     /// Collection items are iterated individually, so genre exclusion is applied in-memory.
     /// </summary>
-    private List<BaseItem> GetCollectionItems(List<string> collectionIds, int limit, List<string>? excludedGenreIds = null)
+    private List<BaseItem> GetCollectionItems(List<string> collectionIds, int limit, object queryUser, List<string>? excludedGenreIds = null)
     {
         var allItems = new List<BaseItem>();
         var seenIds = new HashSet<Guid>();
@@ -945,22 +1039,29 @@ public class MoonfinController : ControllerBase
         {
             if (!Guid.TryParse(colId, out var parentGuid)) continue;
 
-            // Get the collection/playlist as a Folder to access LinkedChildren
-            var parent = _libraryManager.GetItemById(parentGuid);
+            var parent = GetItemByIdForUser(parentGuid, queryUser);
             if (parent is not Folder folder) continue;
 
-            // Access LinkedChildren (data property, no method signature issues)
-            // then resolve each linked item individually via GetItemById (proven stable)
-            foreach (var linkedChild in folder.LinkedChildren)
+            var linkedIds = folder.LinkedChildren
+                .Where(linkedChild => linkedChild.ItemId.HasValue)
+                .Select(linkedChild => linkedChild.ItemId!.Value)
+                .Distinct()
+                .ToArray();
+
+            if (linkedIds.Length == 0) continue;
+
+            var query = new InternalItemsQuery
             {
-                if (!linkedChild.ItemId.HasValue) continue;
-                var item = _libraryManager.GetItemById(linkedChild.ItemId.Value);
-                if (item == null || !seenIds.Add(item.Id)) continue;
+                ItemIds = linkedIds,
+                IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Series],
+                Limit = linkedIds.Length
+            };
 
-                var kind = item.GetBaseItemKind();
-                if (kind != BaseItemKind.Movie && kind != BaseItemKind.Series) continue;
+            if (!TryApplyQueryUser(query, queryUser)) return [];
 
-                // Skip items that have any excluded genre
+            foreach (var item in _libraryManager.GetItemsResult(query).Items)
+            {
+                if (!seenIds.Add(item.Id)) continue;
                 if (excludedNames != null && item.Genres.Any(g => excludedNames.Contains(g))) continue;
 
                 allItems.Add(item);
