@@ -31,6 +31,7 @@ var Settings = {
     getHomeRowsSourceLabel: function(source) {
         var normalized = String(source || '').toLowerCase();
         if (normalized === 'hss') return 'Home Screen Sections (HSS)';
+        if (normalized === 'kefintweaks') return 'KefinTweaks Rows';
         if (normalized === 'moonfin') return 'Moonfin Custom Rows';
         if (normalized === 'legacy') return 'Legacy Jellyfin Home Order';
         return normalized ? normalized : 'Legacy Jellyfin Home Order';

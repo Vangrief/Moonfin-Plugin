@@ -733,6 +733,18 @@ public class MoonfinController : ControllerBase
             Rows = []
         };
 
+        var rowsV2 = NormalizeRows(resolved.HomeRowsV2);
+        var configuredSource = string.IsNullOrWhiteSpace(resolved.HomeRowsSource)
+            ? null
+            : resolved.HomeRowsSource.Trim().ToLowerInvariant();
+
+        if (configuredSource == "kefintweaks" && rowsV2.Count > 0)
+        {
+            response.Source = "kefintweaks";
+            response.Rows = rowsV2;
+            return Ok(response);
+        }
+
         var hssRows = await TryGetHssRowsAsync(userId.Value, language);
         if (hssRows != null && hssRows.Count > 0)
         {
@@ -741,10 +753,9 @@ public class MoonfinController : ControllerBase
             return Ok(response);
         }
 
-        var rowsV2 = NormalizeRows(resolved.HomeRowsV2);
         if (rowsV2.Count > 0)
         {
-            response.Source = string.IsNullOrWhiteSpace(resolved.HomeRowsSource) ? "moonfin" : resolved.HomeRowsSource;
+            response.Source = configuredSource ?? "moonfin";
             response.Rows = rowsV2;
             return Ok(response);
         }
