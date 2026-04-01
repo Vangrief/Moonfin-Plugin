@@ -21,8 +21,8 @@ Moonfin requires the [File Transformation](https://github.com/IAmParadox27/jelly
 
 All Moonfin features are **disabled by default** after installation. To activate them:
 
-1. Click the **Moonfin icon** in the header bar (next to SyncPlay) or open the **☰ hamburger menu** and select **Moonfin**
-2. Enable the features you want — **Navbar**, **Details Page**, **Media Bar**, etc.
+1. Press the Moonfin logo next to the SyncPlay button
+<img width="1521" height="164" alt="image" src="https://github.com/user-attachments/assets/bcb69e4b-edbe-4d1f-b9f1-dc81822d55d9" />
 
 > **Tip for admins:** You can pre-enable features for all users from *Dashboard → Plugins → Moonfin* by setting **Default User Settings**. Users who haven't customized a setting will inherit the admin default, so new users get the full UI out of the box.
 
