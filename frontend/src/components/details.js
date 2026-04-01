@@ -295,21 +295,31 @@ var Details = {
             var castPromise = Promise.resolve(item.People || []);
             var seasonsPromise = item.Type === 'Series' ? self.fetchSeasons(api, itemId).catch(function() { return []; }) : Promise.resolve([]);
             var episodesPromise = (item.Type === 'Episode' && item.SeasonId) ? self.fetchEpisodes(api, item.SeriesId, item.SeasonId).catch(function() { return []; }) : ((item.Type === 'Season' && item.SeriesId) ? self.fetchEpisodes(api, item.SeriesId, item.Id).catch(function() { return []; }) : Promise.resolve([]));
-            var featuresPromise = self.fetchSpecialFeatures(api, item).catch(function() { return []; });
-            var collectionsPromise = self.fetchCollectionItems(api, item).catch(function() { return null; });
 
-            return Promise.all([similarPromise, castPromise, seasonsPromise, episodesPromise, featuresPromise, collectionsPromise]).then(function(results) {
+            return Promise.all([similarPromise, castPromise, seasonsPromise, episodesPromise]).then(function(results) {
                 var similar = results[0];
                 var cast = results[1];
                 var seasons = results[2];
                 var episodes = results[3];
-                var features = results[4] || [];
-                var collections = results[5] || { title: '', items: [] };
                 
                 if (item.Type === 'Season') {
                     self.renderSeasonDetails(item, episodes);
                 } else {
-                    self.renderDetails(item, similar, cast, seasons, episodes, features, collections);
+                    self.renderDetails(item, similar, cast, seasons, episodes, [], { title: '', items: [] });
+                    Promise.all([
+                        self.fetchSpecialFeatures(api, item).catch(function() { return []; }),
+                        self.fetchCollectionItems(api, item).catch(function() { return { title: '', items: [] }; })
+                    ]).then(function(auxResults) {
+                        if (!self.currentItem || self.currentItem.Id !== item.Id) return;
+
+                        var features = auxResults[0] || [];
+                        var collections = auxResults[1] || { title: '', items: [] };
+                        var hasFeatures = features.length > 0;
+                        var hasCollectionItems = collections && collections.items && collections.items.length > 0;
+
+                        if (!hasFeatures && !hasCollectionItems) return;
+                        self.renderDetails(item, similar, cast, seasons, episodes, features, collections);
+                    });
                 }
 
                 if (MdbList.isEnabled()) {

@@ -90,12 +90,7 @@ const Plugin = {
         this._currentUserId = this._getLoggedInUserId();
 
         Storage.checkUserOwnership(this._currentUserId);
-        await Promise.race([
-            Storage.initSync(),
-            new Promise(function(resolve) {
-                setTimeout(resolve, Storage.INITIAL_SYNC_TIMEOUT_MS);
-            })
-        ]);
+        Storage.initSync();
 
         try {
             var settings = Storage.getAll();
