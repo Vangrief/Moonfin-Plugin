@@ -120,6 +120,7 @@ const Plugin = {
             SyncPlay.init();
             this.initSeasonalEffects();
             await this.seedHomeRowOrder();
+            await this.syncHomeRowsV2FromServer();
 
             if (Device.isTV()) {
                 TVNavigation.init();
@@ -246,6 +247,53 @@ const Plugin = {
         } catch (err) {
             console.error('[Moonfin] Failed to fetch home row order', err);
         }
+    },
+
+    async syncHomeRowsV2FromServer() {
+        const profile = Device.getProfileName() || 'global';
+        const apiClient = API.getApiClient();
+        const userId = apiClient ? apiClient.getCurrentUserId?.() : null;
+        const language = userId ? (localStorage.getItem(userId + '-language') || (navigator.language || 'en')) : (navigator.language || 'en');
+
+        let nextRows = null;
+        let nextSource = null;
+
+        try {
+            const result = await API.getHomeRows(profile, language);
+            const rows = result && Array.isArray(result.rows) ? result.rows : [];
+            const source = result && result.source ? String(result.source).toLowerCase() : null;
+
+            if (rows.length > 0) {
+                nextRows = rows;
+                nextSource = source || 'moonfin';
+            }
+        } catch {}
+
+        this.persistHomeRowsV2Profile(profile, nextRows, nextSource);
+    },
+
+    persistHomeRowsV2Profile(profileName, rows, source) {
+        profileName = profileName || 'global';
+        const profile = Storage.getProfile(profileName);
+        const currentRows = profile.homeRowsV2 === undefined ? null : profile.homeRowsV2;
+        const currentSource = profile.homeRowsSource === undefined ? null : profile.homeRowsSource;
+
+        const nextRows = rows && rows.length ? rows : null;
+        const nextSource = source || null;
+
+        if (JSON.stringify(currentRows) === JSON.stringify(nextRows) && currentSource === nextSource) {
+            return;
+        }
+
+        if (nextRows === null) {
+            delete profile.homeRowsV2;
+            delete profile.homeRowsSource;
+        } else {
+            profile.homeRowsV2 = nextRows;
+            profile.homeRowsSource = nextSource;
+        }
+
+        Storage.saveProfile(profileName, profile);
     },
 
     loadStyles() {

@@ -155,4 +155,40 @@ public class MoonfinSettingsProfile
 
     [JsonPropertyName("homeRowOrder")]
     public List<string>? HomeRowOrder { get; set; }
+
+    [JsonPropertyName("homeRowsV2")]
+    public List<MoonfinCustomHomeRow>? HomeRowsV2 { get; set; }
+
+    [JsonPropertyName("homeRowsSource")]
+    public string? HomeRowsSource { get; set; }
+}
+
+public class MoonfinCustomHomeRow
+{
+    [JsonPropertyName("id")]
+    public string? Id { get; set; }
+
+    [JsonPropertyName("title")]
+    public string? Title { get; set; }
+
+    [JsonPropertyName("kind")]
+    public string? Kind { get; set; }
+
+    [JsonPropertyName("source")]
+    public string? Source { get; set; }
+
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    [JsonPropertyName("order")]
+    public int? Order { get; set; }
+
+    [JsonPropertyName("route")]
+    public string? Route { get; set; }
+
+    [JsonPropertyName("viewMode")]
+    public string? ViewMode { get; set; }
+
+    [JsonPropertyName("additionalData")]
+    public string? AdditionalData { get; set; }
 }

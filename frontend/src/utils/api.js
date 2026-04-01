@@ -69,6 +69,28 @@ const API = {
         }
     },
 
+    async getHomeRows(profile, language) {
+        const api = this.getApiClient();
+        if (!api) return null;
+
+        try {
+            const serverUrl = api.serverAddress?.() || '';
+            const token = api.accessToken?.();
+            const headers = token ? { Authorization: 'MediaBrowser Token="' + token + '"' } : {};
+
+            var profileParam = profile || 'global';
+            var langParam = language || (navigator.language || 'en');
+            var url = serverUrl + '/Moonfin/HomeRows/' + encodeURIComponent(profileParam) + '?language=' + encodeURIComponent(langParam);
+            const response = await fetch(url, { method: 'GET', headers: headers });
+
+            if (!response.ok) return null;
+
+            return this.toCamelCase(await response.json());
+        } catch {
+            return null;
+        }
+    },
+
     async getRandomItems(options = {}) {
         const api = this.getApiClient();
         if (!api) return [];

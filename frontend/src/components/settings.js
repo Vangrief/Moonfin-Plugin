@@ -28,6 +28,66 @@ var Settings = {
         if (mediaBarSection) mediaBarSection.style.display = hideMoonfinMediaBarSettings ? 'none' : '';
     },
 
+    getHomeRowsSourceLabel: function(source) {
+        var normalized = String(source || '').toLowerCase();
+        if (normalized === 'hss') return 'Home Screen Sections (HSS)';
+        if (normalized === 'moonfin') return 'Moonfin Custom Rows';
+        if (normalized === 'legacy') return 'Legacy Jellyfin Home Order';
+        return normalized ? normalized : 'Legacy Jellyfin Home Order';
+    },
+
+    renderHomeRowsV2Preview: function(resolved) {
+        var rows = resolved && Array.isArray(resolved.homeRowsV2) ? resolved.homeRowsV2 : [];
+        if (!rows.length) {
+            return '<div class="moonfin-toggle-desc">No custom row payload detected for this profile.</div>';
+        }
+
+        var visible = [];
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i] || {};
+            if (row.enabled === false) continue;
+            visible.push(row);
+        }
+
+        if (!visible.length) {
+            return '<div class="moonfin-toggle-desc">All custom rows are currently disabled.</div>';
+        }
+
+        var sorted = visible.slice().sort(function(a, b) {
+            var ao = typeof a.order === 'number' ? a.order : 9999;
+            var bo = typeof b.order === 'number' ? b.order : 9999;
+            return ao - bo;
+        });
+
+        var maxRows = Math.min(sorted.length, 8);
+        var items = '';
+        for (var ri = 0; ri < maxRows; ri++) {
+            var item = sorted[ri] || {};
+            var title = item.title || item.id || ('Row ' + (ri + 1));
+            var kind = item.kind || 'custom';
+            var source = item.source || 'unknown';
+            items += '<li><strong>' + this._esc(String(title)) + '</strong> <span class="moonfin-toggle-desc">(' + this._esc(String(kind)) + ' / ' + this._esc(String(source)) + ')</span></li>';
+        }
+
+        var more = sorted.length > maxRows
+            ? '<div class="moonfin-toggle-desc" style="margin-top:6px">+' + (sorted.length - maxRows) + ' more rows</div>'
+            : '';
+
+        return '<ul style="margin:6px 0 0 18px; padding:0;">' + items + '</ul>' + more;
+    },
+
+    updateHomeRowsStatus: function(profileName, resolved) {
+        if (!this.dialog) return;
+
+        var sourceEl = this.dialog.querySelector('#moonfin-homerows-source');
+        var previewEl = this.dialog.querySelector('#moonfin-homerows-v2-preview');
+        if (!sourceEl || !previewEl) return;
+
+        var source = (resolved && resolved.homeRowsSource) || ((resolved && resolved.homeRowsV2 && resolved.homeRowsV2.length) ? 'moonfin' : 'legacy');
+        sourceEl.textContent = 'Resolved source for ' + profileName + ': ' + this.getHomeRowsSourceLabel(source);
+        previewEl.innerHTML = this.renderHomeRowsV2Preview(resolved || {});
+    },
+
     show: function() {
         if (this.isOpen) return;
 
@@ -608,6 +668,8 @@ var Settings = {
 
         var homeRowContent =
             '<p class="moonfin-toggle-desc" style="margin:0 0 8px 0">Drag to reorder. Check or uncheck to show or hide a section. Changes are saved to the Jellyfin server per device profile.</p>' +
+            '<p class="moonfin-toggle-desc" id="moonfin-homerows-source" style="margin:0 0 8px 0">Resolved source for global: ' + this.getHomeRowsSourceLabel((settings.homeRowsSource || (settings.homeRowsV2 && settings.homeRowsV2.length ? 'moonfin' : 'legacy'))) + '</p>' +
+            '<div id="moonfin-homerows-v2-preview" style="margin:0 0 10px 0; padding:8px 10px; border:1px solid rgba(255,255,255,0.12); border-radius:8px; background:rgba(0,0,0,0.15)">' + this.renderHomeRowsV2Preview(settings) + '</div>' +
             '<div class="moonfin-sortable-list" id="moonfin-homerows-sortable">' + rowItems + '</div>';
 
         var currentDeviceProfile = Device.getProfileName();
@@ -775,6 +837,7 @@ var Settings = {
         }
 
         this.toggleMediaBarSettingsVisibility(profileName, desktopMode);
+        this.updateHomeRowsStatus(profileName, resolved);
 
         // Update profile info text
         var infoText = this.dialog.querySelector('.moonfin-profile-info-text');

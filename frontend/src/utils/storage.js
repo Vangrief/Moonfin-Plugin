@@ -62,7 +62,9 @@ const Storage = {
         tmdbApiKey: '',
         tmdbEpisodeRatingsEnabled: false,
 
-        homeRowOrder: ['smalllibrarytiles', 'resume', 'resumeaudio', 'resumebook', 'livetv', 'nextup', 'latestmedia']
+        homeRowOrder: ['smalllibrarytiles', 'resume', 'resumeaudio', 'resumebook', 'livetv', 'nextup', 'latestmedia'],
+        homeRowsV2: null,
+        homeRowsSource: null
     },
 
     colorOptions: {
@@ -480,7 +482,9 @@ const Storage = {
             mdblistShowRatingNames: 'mdblistShowRatingNames',
             tmdbApiKey: 'tmdbApiKey',
             tmdbEpisodeRatingsEnabled: 'tmdbEpisodeRatingsEnabled',
-            homeRowOrder: 'homeRowOrder'
+            homeRowOrder: 'homeRowOrder',
+            homeRowsV2: 'homeRowsV2',
+            homeRowsSource: 'homeRowsSource'
         };
         // Only include properties that have actual values — prevents undefined/null
         // from polluting merge operations and overwriting valid false values
@@ -532,7 +536,9 @@ const Storage = {
             mdblistShowRatingNames: localProfile.mdblistShowRatingNames,
             tmdbApiKey: localProfile.tmdbApiKey,
             tmdbEpisodeRatingsEnabled: localProfile.tmdbEpisodeRatingsEnabled,
-            homeRowOrder: localProfile.homeRowOrder
+            homeRowOrder: localProfile.homeRowOrder,
+            homeRowsV2: localProfile.homeRowsV2,
+            homeRowsSource: localProfile.homeRowsSource
         };
     },
 
