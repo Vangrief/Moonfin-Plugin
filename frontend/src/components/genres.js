@@ -146,6 +146,7 @@ var Genres = {
 
     getCardShapeClass: function(item) {
         if (this.imageType === 'thumbnail') return 'type-landscape';
+        if (this.imageType === 'banner') return 'type-banner';
         if (this.imageType === 'square' || (item && (item.Type === 'MusicAlbum' || item.Type === 'MusicArtist' || item.Type === 'Audio'))) {
             return 'type-square';
         }
@@ -156,15 +157,19 @@ var Genres = {
         if (this.imageType === 'square') {
             return this.imageSize === 'small' ? 140 : (this.imageSize === 'large' ? 240 : 180);
         }
-        if (this.imageType === 'thumbnail') {
+        if (this.imageType === 'thumbnail' || this.imageType === 'banner') {
             return this.imageSize === 'small' ? 120 : (this.imageSize === 'large' ? 210 : 160);
         }
         return this.imageSize === 'small' ? 200 : (this.imageSize === 'large' ? 350 : 270);
     },
 
+    getNextImageType: function(type) {
+        return type === 'poster' ? 'thumbnail' : (type === 'thumbnail' ? 'banner' : (type === 'banner' ? 'square' : 'poster'));
+    },
+
     getAdaptiveGridClass: function() {
         var directionClass = this.gridDirection === 'horizontal' ? 'moonfin-grid-horizontal' : 'moonfin-grid-vertical';
-        var typeClass = this.imageType === 'thumbnail' ? 'type-landscape' : (this.imageType === 'square' ? 'type-square' : 'type-poster');
+        var typeClass = this.imageType === 'thumbnail' ? 'type-landscape' : (this.imageType === 'banner' ? 'type-banner' : (this.imageType === 'square' ? 'type-square' : 'type-poster'));
         return 'moonfin-genres-adaptive-grid ' + directionClass + ' size-' + this.imageSize + ' ' + typeClass;
     },
 
@@ -339,7 +344,7 @@ var Genres = {
                     self.renderGrid();
                     break;
                 case 'cycle-image-type':
-                    self.imageType = self.imageType === 'poster' ? 'thumbnail' : (self.imageType === 'thumbnail' ? 'square' : 'poster');
+                    self.imageType = self.getNextImageType(self.imageType);
                     self.saveViewPrefs();
                     self.renderGrid();
                     break;
@@ -476,10 +481,12 @@ var Genres = {
             for (var j = 0; j < this.browseItems.length; j++) {
                 var item = this.browseItems[j];
                 var shapeClass = this.getCardShapeClass(item);
-                var imageType = this.imageType === 'thumbnail' ? 'Thumb' : 'Primary';
+                var imageType = this.imageType === 'thumbnail' ? 'Thumb' : (this.imageType === 'banner' ? 'Banner' : 'Primary');
                 var posterUrl = imageType === 'Thumb'
                     ? (item.ImageTags && item.ImageTags.Thumb ? API.getImageUrl(item, 'Thumb', { maxWidth: 500 }) : null)
-                    : API.getPrimaryImageUrl(item, { maxWidth: 500 });
+                    : (imageType === 'Banner'
+                        ? (item.ImageTags && item.ImageTags.Banner ? API.getImageUrl(item, 'Banner', { maxWidth: 500 }) : null)
+                        : API.getPrimaryImageUrl(item, { maxWidth: 500 }));
                 if (!posterUrl) {
                     posterUrl = API.getBackdropUrl(item, { maxWidth: 500 });
                 }
@@ -624,7 +631,7 @@ var Genres = {
         var cycleImageType = this.container.querySelector('[data-action="cycle-image-type"]');
         if (cycleImageType) {
             cycleImageType.addEventListener('click', function() {
-                self.imageType = self.imageType === 'poster' ? 'thumbnail' : (self.imageType === 'thumbnail' ? 'square' : 'poster');
+                self.imageType = self.getNextImageType(self.imageType);
                 self.saveViewPrefs();
                 self.renderBrowse();
             });

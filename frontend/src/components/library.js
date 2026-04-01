@@ -333,6 +333,7 @@ var Library = {
 
     getCardShapeClass: function(item) {
         if (this.imageType === 'thumbnail') return 'type-landscape';
+        if (this.imageType === 'banner') return 'type-banner';
         if (this.imageType === 'square' || item.Type === 'MusicAlbum' || item.Type === 'MusicArtist' || item.Type === 'Audio') {
             return 'type-square';
         }
@@ -343,15 +344,19 @@ var Library = {
         if (this.imageType === 'square') {
             return this.imageSize === 'small' ? 140 : (this.imageSize === 'large' ? 240 : 180);
         }
-        if (this.imageType === 'thumbnail') {
+        if (this.imageType === 'thumbnail' || this.imageType === 'banner') {
             return this.imageSize === 'small' ? 120 : (this.imageSize === 'large' ? 210 : 160);
         }
         return this.imageSize === 'small' ? 200 : (this.imageSize === 'large' ? 350 : 270);
     },
 
+    getNextImageType: function(type) {
+        return type === 'poster' ? 'thumbnail' : (type === 'thumbnail' ? 'banner' : (type === 'banner' ? 'square' : 'poster'));
+    },
+
     getGridClass: function() {
         var directionClass = this.gridDirection === 'horizontal' ? 'moonfin-library-grid-horizontal' : 'moonfin-library-grid-vertical';
-        var typeClass = this.imageType === 'thumbnail' ? 'type-landscape' : (this.imageType === 'square' ? 'type-square' : 'type-poster');
+        var typeClass = this.imageType === 'thumbnail' ? 'type-landscape' : (this.imageType === 'banner' ? 'type-banner' : (this.imageType === 'square' ? 'type-square' : 'type-poster'));
         return directionClass + ' size-' + this.imageSize + ' ' + typeClass;
     },
 
@@ -553,10 +558,14 @@ var Library = {
             for (var j = 0; j < visibleItems.length; j++) {
                 var item = visibleItems[j];
                 var shapeClass = this.getCardShapeClass(item);
-                var imageType = this.imageType === 'thumbnail' ? 'Thumb' : 'Primary';
-                var posterUrl = imageType === 'Thumb'
-                    ? (item.ImageTags && item.ImageTags.Thumb ? API.getImageUrl(item, 'Thumb', { maxWidth: 500 }) : null)
-                    : API.getPrimaryImageUrl(item, { maxWidth: 500 });
+                var posterUrl;
+                if (this.imageType === 'thumbnail') {
+                    posterUrl = item.ImageTags && item.ImageTags.Thumb ? API.getImageUrl(item, 'Thumb', { maxWidth: 500 }) : null;
+                } else if (this.imageType === 'banner') {
+                    posterUrl = item.ImageTags && item.ImageTags.Banner ? API.getImageUrl(item, 'Banner', { maxWidth: 500 }) : null;
+                } else {
+                    posterUrl = API.getPrimaryImageUrl(item, { maxWidth: 500 });
+                }
                 if (!posterUrl) {
                     posterUrl = API.getBackdropUrl(item, { maxWidth: 500 });
                 }
@@ -700,7 +709,7 @@ var Library = {
                     break;
                 case 'cycle-image-type':
                     if (self.shouldShowImageTypeOption()) {
-                        self.imageType = self.imageType === 'poster' ? 'thumbnail' : 'poster';
+                        self.imageType = self.getNextImageType(self.imageType);
                         self.saveViewPrefs();
                         self.render();
                     }
