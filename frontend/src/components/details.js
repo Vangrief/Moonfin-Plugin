@@ -2979,6 +2979,8 @@ var Details = {
             '</div>'
         ) : '';
 
+        var isFavorite = item.UserData ? item.UserData.IsFavorite : false;
+
         var backdrop = this.container.querySelector('.moonfin-details-backdrop');
         if (backdrop) {
             backdrop.style.backgroundImage = '';
@@ -2999,6 +3001,17 @@ var Details = {
                         '<h1 class="moonfin-title">' + item.Name + '</h1>' +
                         infoRowHtml +
                         (item.Overview ? '<p class="moonfin-overview">' + item.Overview + '</p>' : '') +
+                        '<div class="moonfin-action-btns" style="margin-top:16px">' +
+                            '<div class="moonfin-btn-wrapper moonfin-focusable ' + (isFavorite ? 'active' : '') + '" data-action="favorite" tabindex="0">' +
+                                '<div class="moonfin-btn-circle">' +
+                                    '<svg viewBox="0 -960 960 960" fill="currentColor"><path d="' + (isFavorite ?
+                                        'm480-120-58-52q-101-91-167-157T150-447.5Q111-500 95.5-544T80-634q0-94 63-157t157-63q52 0 99 22t81 62q34-40 81-62t99-22q94 0 157 63t63 157q0 46-15.5 90T810-447.5Q771-395 705-329T538-172l-58 52Z' :
+                                        'M480-120q-14 0-28.5-5T426-140q-43-38-97.5-82.5T232-308q-41.5-41.5-72-83T122-475q-8-32-11-60.5T108-596q0-86 57-147t147-61q52 0 99 22t69 62q22-40 69-62t99-22q90 0 147 61t57 147q0 32-3 60.5T837-475q-7 42-37.5 83.5T728-308q-42 42-96.5 86.5T534-140q-11 10-25.5 15t-28.5 5Zm0-80q41-37 88.5-75t83-68.5q35.5-30.5 61-58T746-456q9-27 11.5-49t2.5-43q0-53-34.5-91.5T636-678q-43 0-77.5 24T507-602h-54q-17-28-51.5-52T324-678q-55 0-89.5 38.5T200-548q0 21 2.5 43t11.5 49q9 27 34.5 54.5t61 58Q345-313 392.5-275T480-200Z') +
+                                    '"/></svg>' +
+                                '</div>' +
+                                '<span class="moonfin-btn-label">' + (isFavorite ? 'Favorited' : 'Favorite') + '</span>' +
+                            '</div>' +
+                        '</div>' +
                     '</div>' +
                 '</div>' +
 
@@ -3017,6 +3030,9 @@ var Details = {
 
         var backBtn = panel.querySelector('.moonfin-details-back');
         if (backBtn) backBtn.addEventListener('click', function() { self.hide(); });
+
+        var favBtn = panel.querySelector('[data-action="favorite"]');
+        if (favBtn) favBtn.addEventListener('click', function() { self.toggleFavorite(item); });
 
         var filmCards = panel.querySelectorAll('.moonfin-similar-card');
         for (var i = 0; i < filmCards.length; i++) {
