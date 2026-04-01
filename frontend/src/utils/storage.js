@@ -5,6 +5,7 @@ const Storage = {
     SYNC_PREF_KEY: 'moonfin_sync_enabled',
     USER_ID_KEY: 'moonfin_userId',
     CLIENT_ID: 'moonfin-web',
+    INITIAL_SYNC_TIMEOUT_MS: 1500,
 
     syncState: {
         serverAvailable: null,
@@ -269,11 +270,19 @@ const Storage = {
     // ─── Server Communication ───────────────────────────────────────
 
     async pingServer() {
+        var timeoutId = null;
+        var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
         try {
             const serverUrl = window.ApiClient?.serverAddress?.() || '';
+            if (controller) {
+                timeoutId = setTimeout(function() {
+                    controller.abort();
+                }, Storage.INITIAL_SYNC_TIMEOUT_MS);
+            }
             const response = await fetch(`${serverUrl}/Moonfin/Ping`, {
                 method: 'GET',
-                headers: this.getAuthHeader()
+                headers: this.getAuthHeader(),
+                signal: controller ? controller.signal : undefined
             });
 
             if (response.ok) {
@@ -290,8 +299,8 @@ const Storage = {
                 console.log('[Moonfin] Server plugin detected:', data);
                 return data;
             }
-        } catch (e) {
-            console.log('[Moonfin] Server plugin not available:', e.message);
+        } finally {
+            if (timeoutId) clearTimeout(timeoutId);
         }
         
         this.syncState.serverAvailable = false;
@@ -724,7 +733,9 @@ const Storage = {
     },
 
     _runInitialSync() {
-        return this.sync().catch(() => {}).finally(() => {
+        return this.sync().catch(function(e) {
+            console.warn('[Moonfin] Initial sync failed:', e && e.message ? e.message : e);
+        }).finally(() => {
             this._initialSyncPromise = null;
         });
     },
