@@ -1002,7 +1002,8 @@ var Details = {
                 if (video.Width >= 3800) badges.push('<span class="moonfin-badge moonfin-badge-4k">4K</span>');
                 else if (video.Width >= 1900) badges.push('<span class="moonfin-badge moonfin-badge-hd">HD</span>');
                 
-                if (video.VideoRange === 'HDR' || video.VideoRangeType) badges.push('<span class="moonfin-badge moonfin-badge-hdr">HDR</span>');
+                var hdrRangeTypes = ['HDR10', 'HDR10Plus', 'HLG', 'DOVI', 'DOVIWithHDR10', 'DOVIWithHDR10Plus', 'DOVIWithHLG', 'DOVIWithSDR'];
+                if (video.VideoRange === 'HDR' || (video.VideoRangeType && hdrRangeTypes.indexOf(video.VideoRangeType) !== -1)) badges.push('<span class="moonfin-badge moonfin-badge-hdr">HDR</span>');
                 
                 if (video.VideoDoViTitle || (video.Title && video.Title.indexOf('Dolby Vision') !== -1)) {
                     badges.push('<span class="moonfin-badge moonfin-badge-dv">DV</span>');
