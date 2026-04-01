@@ -3,11 +3,20 @@
     "guid": "8c5d0e91-4f2a-4b6d-9e3f-1a7c8d9e0f2b",
     "name": "Moonfin",
     "overview": "Custom UI and settings sync for Jellyfin",
-    "description": "Moonfin brings a modern TV-style UI to Jellyfin web. Features include: custom navbar, media bar with featured content, Jellyseerr integration, and cross-device settings synchronization. Works with Android TV, Roku, Tizen, webOS, and Web clients.",
+    "description": "Moonfin brings a modern TV-style UI to Jellyfin web. Features include: custom navbar, media bar with featured content, Jellyseerr integration, and cross-device settings synchronization. Works with Android TV, Roku, Tizen, webOS, Android mobile, iOS, tvOS, and Web clients.",
     "owner": "RadicalMuffinMan",
     "category": "General",
     "imageUrl": "https://raw.githubusercontent.com/Moonfin-Client/Plugin/master/backend/assets/logo.png",
     "versions": [
+      {
+        "version": "1.8.0.0",
+        "changelog": "## Features\n\n- Added compatibility with @IAmParadox27 's  [media bar](https://github.com/IAmParadox27/jellyfin-plugin-media-bar/) and [Home Screen Sections](https://github.com/IAmParadox27/jellyfin-plugin-home-sections) rows\n- Added support for @ranaldsgift 's  [KefinTweaks](https://github.com/ranaldsgift/KefinTweaks) rows\n> [!NOTE]  \n> The rows are not yet implemented in the other clients. This is a manual method that will take time but the framework for implementation is done. The media bar compatibility is for web UI only under the desktop profile\n\n- Media bar went full screen like other clients\n- Added sync mode clarity dialog box\n- Added trailer overlay in details screen\n- Added details blur/opacity controls and new endpoints so it syncs with clients\n- Added special features, chapters, and collections in details\n- Added back button and fixed details tint behavior\n- Added favorite button for people details\n- Added favorite/watched indicators in details and library\n- Updated libraries UI\n- Updated collections to display contents in release order\n- Updated Moonfin plugin logo\n\n## Bug Fixes\n\n- Fixed details tint behavior that was causing the original jellyfin ui's backdrop image to look black\n- Fixed header bar glitch that was causing the library title to scroll with users in the library\n- Fixed plugin and UI not applying correctly (#60, #66, #76)\n- Fixed removed media bar items that did not have a backdrop and removed items that users did not have access to.\n- Fixed HDR badge truthy logic and expanded HDR range handling\n- Fixed trailer button forwards to home page\n- Fixed special features not showing with new details page\n- Fixed Seerr invalid CSRF token (#53, #63)\n- Fixed Seerr icon not showing on toolbar\n- Fixed Seerr integration slowness\n- Fixed /Moonfin/Settings returns 404 via reverse proxy",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/Moonfin-Client/Plugin/releases/download/1.8.0/Moonfin.Server-1.8.0.0.zip",
+        "checksum": "BF2DA2868F49C577F14F2D61354F6281",
+        "timestamp": "2026-04-01T16:05:10",
+        "dependencies": []
+      },
       {
         "version": "1.7.1.0",
         "changelog": "New Features:\n- Media Bar Genre Exclusions - exclude specific genres from the media bar so items from those genres won't appear, configurable per-user and as admin defaults\n- GET /Moonfin/Genres endpoint - returns all genre IDs and localized names for the genre picker\n\nBug Fixes:\n- Fixed Jellyseerr CSRF token errors causing failed authentication and proxy requests\n- Fixed Jellyseerr button not appearing when navbar/sidebar initializes after config is dispatched\n- Fixed media bar showing loading state indefinitely when no items are returned\n- Fixed media bar active class being added when there are no items to display\n- Fixed unnecessary Content-Type header on GET requests\n- Fixed duplicate event listeners on collection/library picker re-renders\n\nImprovements:\n- CSRF tokens are now fetched and sent for all Jellyseerr write operations with a fallback for IP-based URLs\n- Media bar loading class is now removed in error and empty states",
