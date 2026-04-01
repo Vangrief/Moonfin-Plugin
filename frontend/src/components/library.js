@@ -24,6 +24,8 @@ var Library = {
     focusedMdbHtml: '',
     _focusedMdbToken: 0,
     _loadingToken: 0,
+    FAVORITE_INDICATOR_SVG: '<svg viewBox="0 -960 960 960" fill="currentColor"><path d="m480-120-58-52q-101-91-167-157T150-447.5Q111-500 95.5-544T80-634q0-94 63-157t157-63q52 0 99 22t81 62q34-40 81-62t99-22q94 0 157 63t63 157q0 46-15.5 90T810-447.5Q771-395 705-329T538-172l-58 52Z"/></svg>',
+    WATCHED_INDICATOR_SVG: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 7L9 19l-5.5-5.5 1.41-1.41L9 16.17 19.59 5.59 21 7z"/></svg>',
 
     SORT_OPTIONS: [
         { key: 'SortName', field: 'SortName', order: 'Ascending', label: 'Name' },
@@ -570,7 +572,10 @@ var Library = {
                     html += '    <span class="moonfin-library-folder-badge">Folder</span>';
                 }
                 if (item.UserData && item.UserData.IsFavorite) {
-                    html += '    <span class="moonfin-library-favorite-badge">&#10084;</span>';
+                    html += '    <div class="moonfin-library-favorite-indicator" data-item-id="' + item.Id + '">' + this.FAVORITE_INDICATOR_SVG + '</div>';
+                }
+                if (item.UserData && item.UserData.Played) {
+                    html += '    <div class="moonfin-library-watched-indicator" data-item-id="' + item.Id + '">' + this.WATCHED_INDICATOR_SVG + '</div>';
                 }
                 html += '  </div>';
                 html += '  <div class="moonfin-genre-item-info"><div class="moonfin-genre-item-name">' + (item.Name || 'Unknown') + '</div></div>';

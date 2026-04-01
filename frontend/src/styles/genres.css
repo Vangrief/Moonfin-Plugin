@@ -398,6 +398,48 @@ body.moonfin-library-visible.moonfin-navbar-active .moonfin-library-overlay {
     color: #fff;
 }
 
+.moonfin-library-favorite-indicator {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    width: 28px;
+    height: 28px;
+    background: rgba(244, 67, 54, 0.9);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.moonfin-library-favorite-indicator svg {
+    width: 16px;
+    height: 16px;
+    fill: #fff;
+}
+
+.moonfin-library-watched-indicator {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 28px;
+    height: 28px;
+    background: rgba(0, 164, 220, 0.9);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.moonfin-library-watched-indicator svg {
+    width: 16px;
+    height: 16px;
+    fill: #fff;
+}
+
 .moonfin-genre-item-type-badge.movie {
     background: rgba(0, 164, 220, 0.85);
 }

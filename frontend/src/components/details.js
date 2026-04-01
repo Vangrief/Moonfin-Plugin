@@ -9,6 +9,16 @@ var Details = {
     _trailerPreviousFocus: null,
     _trailerPlayer: null,
     _settingsChangedHandler: null,
+    FAVORITE_INDICATOR_SVG: '<svg viewBox="0 -960 960 960" fill="currentColor"><path d="m480-120-58-52q-101-91-167-157T150-447.5Q111-500 95.5-544T80-634q0-94 63-157t157-63q52 0 99 22t81 62q34-40 81-62t99-22q94 0 157 63t63 157q0 46-15.5 90T810-447.5Q771-395 705-329T538-172l-58 52Z"/></svg>',
+    WATCHED_INDICATOR_SVG: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 7L9 19l-5.5-5.5 1.41-1.41L9 16.17 19.59 5.59 21 7z"/></svg>',
+
+    buildFavoriteIndicator: function() {
+        return '<div class="moonfin-favorite-indicator">' + this.FAVORITE_INDICATOR_SVG + '</div>';
+    },
+
+    buildWatchedIndicator: function() {
+        return '<div class="moonfin-watched-indicator">' + this.WATCHED_INDICATOR_SVG + '</div>';
+    },
 
     init: function() {
         this.createContainer();
@@ -771,10 +781,12 @@ var Details = {
             var simPosterTag = sim.ImageTags ? sim.ImageTags.Primary : null;
             var simPosterUrl = simPosterTag ? serverUrl + '/Items/' + sim.Id + '/Images/Primary?maxHeight=400&quality=80' : '';
             var simWatched = sim.UserData && sim.UserData.Played;
+            var simFavorite = sim.UserData && sim.UserData.IsFavorite;
             return '<div class="moonfin-similar-card moonfin-focusable" data-item-id="' + sim.Id + '" data-type="' + sim.Type + '" tabindex="0">' +
                 '<div class="moonfin-similar-poster">' +
                     (simPosterUrl ? '<img src="' + simPosterUrl + '" alt="" loading="lazy">' : '') +
-                    (simWatched ? '<div class="moonfin-watched-indicator"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 7L9 19l-5.5-5.5 1.41-1.41L9 16.17 19.59 5.59 21 7z"/></svg></div>' : '') +
+                    (simFavorite ? self.buildFavoriteIndicator() : '') +
+                    (simWatched ? self.buildWatchedIndicator() : '') +
                 '</div>' +
                 '<span class="moonfin-similar-title">' + sim.Name + '</span>' +
             '</div>';
@@ -795,11 +807,13 @@ var Details = {
                                 ? serverUrl + '/Items/' + item.Id + '/Images/Primary?maxHeight=350&quality=80'
                                 : '');
                         var seasonWatched = season.UserData && season.UserData.Played;
+                        var seasonFavorite = season.UserData && season.UserData.IsFavorite;
                         var seasonUnplayed = season.UserData ? season.UserData.UnplayedItemCount : null;
                         return '<div class="moonfin-season-card moonfin-focusable" data-item-id="' + season.Id + '" data-type="Season" tabindex="0">' +
                             '<div class="moonfin-season-poster">' +
                                 (seasonPoster ? '<img src="' + seasonPoster + '" alt="" loading="lazy">' : '<span>' + season.Name + '</span>') +
-                                (seasonWatched ? '<div class="moonfin-watched-indicator"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 7L9 19l-5.5-5.5 1.41-1.41L9 16.17 19.59 5.59 21 7z"/></svg></div>' :
+                                (seasonFavorite ? self.buildFavoriteIndicator() : '') +
+                                (seasonWatched ? self.buildWatchedIndicator() :
                                 (seasonUnplayed > 0 ? '<div class="moonfin-unplayed-count">' + seasonUnplayed + '</div>' : '')) +
                             '</div>' +
                             '<span class="moonfin-season-name">' + season.Name + '</span>' +
@@ -818,9 +832,13 @@ var Details = {
                 var epThumbUrl = epThumbTag ? serverUrl + '/Items/' + ep.Id + '/Images/Primary?maxWidth=400&quality=80' : '';
                 var isCurrentEp = ep.Id === item.Id;
                 var epRuntime = ep.RunTimeTicks ? self.formatRuntime(ep.RunTimeTicks) : '';
+                var epWatched = ep.UserData && ep.UserData.Played;
+                var epFavorite = ep.UserData && ep.UserData.IsFavorite;
                 return '<div class="moonfin-episode-card moonfin-focusable' + (isCurrentEp ? ' moonfin-episode-current' : '') + '" data-item-id="' + ep.Id + '" data-type="Episode" tabindex="0">' +
                     '<div class="moonfin-episode-thumb">' +
                         (epThumbUrl ? '<img src="' + epThumbUrl + '" alt="" loading="lazy">' : '<div class="moonfin-episode-thumb-placeholder"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM9.5 7.5l7 4.5-7 4.5z"/></svg></div>') +
+                        (epFavorite ? self.buildFavoriteIndicator() : '') +
+                        (epWatched ? self.buildWatchedIndicator() : '') +
                         (ep.UserData && ep.UserData.PlayedPercentage ? '<div class="moonfin-episode-progress"><div class="moonfin-episode-progress-bar" style="width:' + Math.min(ep.UserData.PlayedPercentage, 100) + '%"></div></div>' : '') +
                     '</div>' +
                     '<div class="moonfin-episode-info">' +
@@ -881,10 +899,12 @@ var Details = {
                         var featurePosterTag = feature.ImageTags ? (feature.ImageTags.Primary || feature.ImageTags.Thumb) : null;
                         var featurePosterUrl = featurePosterTag ? serverUrl + '/Items/' + feature.Id + '/Images/Primary?maxHeight=400&quality=80' : '';
                         var featureWatched = feature.UserData && feature.UserData.Played;
+                        var featureFavorite = feature.UserData && feature.UserData.IsFavorite;
                         return '<div class="moonfin-similar-card moonfin-focusable" data-item-id="' + feature.Id + '" data-type="' + (feature.Type || 'Video') + '" tabindex="0">' +
                             '<div class="moonfin-similar-poster">' +
                                 (featurePosterUrl ? '<img src="' + featurePosterUrl + '" alt="" loading="lazy">' : '') +
-                                (featureWatched ? '<div class="moonfin-watched-indicator"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 7L9 19l-5.5-5.5 1.41-1.41L9 16.17 19.59 5.59 21 7z"/></svg></div>' : '') +
+                                (featureFavorite ? self.buildFavoriteIndicator() : '') +
+                                (featureWatched ? self.buildWatchedIndicator() : '') +
                             '</div>' +
                             '<span class="moonfin-similar-title">' + (feature.Name || 'Feature') + '</span>' +
                         '</div>';
@@ -1067,6 +1087,7 @@ var Details = {
                     var label = wrapper.querySelector('.moonfin-btn-label');
                     if (label) label.textContent = item.UserData.IsFavorite ? 'Favorited' : 'Favorite';
                 }
+                self.updateItemIndicators(item.Id);
             }
         }).catch(function(err) { console.error('[Moonfin] Details: Failed to toggle favorite', err); });
     },
@@ -1091,8 +1112,81 @@ var Details = {
                     var label = wrapper.querySelector('.moonfin-btn-label');
                     if (label) label.textContent = item.UserData.Played ? 'Watched' : 'Unwatched';
                 }
+                self.updateItemIndicators(item.Id);
             }
         }).catch(function(err) { console.error('[Moonfin] Details: Failed to toggle played', err); });
+    },
+
+    updateItemIndicators: function(itemId) {
+        if (!itemId || !this.currentItem || this.currentItem.Id !== itemId) return;
+        
+        var self = this;
+        var item = this.currentItem;
+        
+        var panel = this.container.querySelector('.moonfin-details-panel');
+        if (panel) {
+            panel.querySelectorAll('[data-item-id="' + itemId + '"]').forEach(function(card) {
+                var posterDiv = card.querySelector('.moonfin-similar-poster') || 
+                               card.querySelector('.moonfin-season-poster') || 
+                               card.querySelector('.moonfin-episode-thumb') || 
+                               card.querySelector('.moonfin-season-ep-thumb');
+                if (!posterDiv) return;
+                posterDiv.querySelectorAll('.moonfin-favorite-indicator, .moonfin-watched-indicator').forEach(function(el) { el.remove(); });
+                if (item.UserData && item.UserData.IsFavorite) {
+                    var fav = document.createElement('div');
+                    fav.className = 'moonfin-favorite-indicator';
+                    fav.innerHTML = self.FAVORITE_INDICATOR_SVG;
+                    posterDiv.appendChild(fav);
+                }
+                if (item.UserData && item.UserData.Played) {
+                    var watched = document.createElement('div');
+                    watched.className = 'moonfin-watched-indicator';
+                    watched.innerHTML = self.WATCHED_INDICATOR_SVG;
+                    posterDiv.appendChild(watched);
+                }
+            });
+        }
+        
+        var libraryOverlay = document.querySelector('.moonfin-library-overlay.visible');
+        if (libraryOverlay) {
+            libraryOverlay.querySelectorAll('[data-item-id="' + itemId + '"]').forEach(function(card) {
+                var posterDiv = card.querySelector('.moonfin-genre-item-poster');
+                if (!posterDiv) return;
+                posterDiv.querySelectorAll('.moonfin-library-favorite-indicator, .moonfin-library-watched-indicator').forEach(function(el) { el.remove(); });
+                if (item.UserData && item.UserData.IsFavorite) {
+                    var fav = document.createElement('div');
+                    fav.className = 'moonfin-library-favorite-indicator';
+                    fav.setAttribute('data-item-id', itemId);
+                    fav.innerHTML = self.FAVORITE_INDICATOR_SVG;
+                    posterDiv.appendChild(fav);
+                }
+                if (item.UserData && item.UserData.Played) {
+                    var watched = document.createElement('div');
+                    watched.className = 'moonfin-library-watched-indicator';
+                    watched.setAttribute('data-item-id', itemId);
+                    watched.innerHTML = self.WATCHED_INDICATOR_SVG;
+                    posterDiv.appendChild(watched);
+                }
+            });
+        }
+        
+        document.querySelectorAll('.card[data-id="' + itemId + '"], .listItem[data-id="' + itemId + '"]').forEach(function(card) {
+            var posterContainer = card.querySelector('.cardImageContainer') || card.querySelector('.listItemImageContainer');
+            if (!posterContainer) return;
+            posterContainer.querySelectorAll('.moonfin-library-favorite-indicator, .moonfin-library-watched-indicator').forEach(function(el) { el.remove(); });
+            if (item.UserData && item.UserData.IsFavorite) {
+                var fav = document.createElement('div');
+                fav.className = 'moonfin-library-favorite-indicator';
+                fav.innerHTML = self.FAVORITE_INDICATOR_SVG;
+                posterContainer.appendChild(fav);
+            }
+            if (item.UserData && item.UserData.Played) {
+                var watched = document.createElement('div');
+                watched.className = 'moonfin-library-watched-indicator';
+                watched.innerHTML = self.WATCHED_INDICATOR_SVG;
+                posterContainer.appendChild(watched);
+            }
+        });
     },
 
     setupScrollArrows: function(panel) {
@@ -2712,10 +2806,13 @@ var Details = {
             var epRuntime = ep.RunTimeTicks ? self.formatRuntime(ep.RunTimeTicks) : '';
             var epProgress = ep.UserData ? ep.UserData.PlayedPercentage : 0;
             var isPlayed = ep.UserData && ep.UserData.Played;
+            var isFavorite = ep.UserData && ep.UserData.IsFavorite;
 
             return '<div class="moonfin-season-ep moonfin-focusable" data-item-id="' + ep.Id + '" data-type="Episode" tabindex="0">' +
                 '<div class="moonfin-season-ep-thumb">' +
                     (epThumbUrl ? '<img src="' + epThumbUrl + '" alt="" loading="lazy">' : '<div class="moonfin-season-ep-thumb-placeholder"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM9.5 7.5l7 4.5-7 4.5z"/></svg></div>') +
+                    (isFavorite ? self.buildFavoriteIndicator() : '') +
+                    (isPlayed ? self.buildWatchedIndicator() : '') +
                     (epProgress ? '<div class="moonfin-episode-progress"><div class="moonfin-episode-progress-bar" style="width:' + Math.min(epProgress, 100) + '%"></div></div>' : '') +
                 '</div>' +
                 '<div class="moonfin-season-ep-body">' +
@@ -2943,9 +3040,13 @@ var Details = {
                 var fiPosterTag = fi.ImageTags ? fi.ImageTags.Primary : null;
                 var fiPosterUrl = fiPosterTag ? serverUrl + '/Items/' + fi.Id + '/Images/Primary?maxHeight=400&quality=80' : '';
                 var fiYear = fi.ProductionYear || (fi.PremiereDate ? new Date(fi.PremiereDate).getFullYear() : '');
+                var fiWatched = fi.UserData && fi.UserData.Played;
+                var fiFavorite = fi.UserData && fi.UserData.IsFavorite;
                 return '<div class="moonfin-similar-card moonfin-focusable" data-item-id="' + fi.Id + '" data-type="' + fi.Type + '" tabindex="0">' +
                     '<div class="moonfin-similar-poster">' +
                         (fiPosterUrl ? '<img src="' + fiPosterUrl + '" alt="" loading="lazy">' : '<div class="moonfin-poster-placeholder"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14z"/></svg></div>') +
+                        (fiFavorite ? self.buildFavoriteIndicator() : '') +
+                        (fiWatched ? self.buildWatchedIndicator() : '') +
                     '</div>' +
                     '<span class="moonfin-similar-title">' + fi.Name + '</span>' +
                     (fiYear ? '<span class="moonfin-person-film-year">' + fiYear + '</span>' : '') +
