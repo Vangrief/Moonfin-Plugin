@@ -5,6 +5,29 @@ var Settings = {
 
     _esc: function(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; },
 
+    hasParadoxMediaBar: function() {
+        if (window.slideshowPure) return true;
+        return !!document.querySelector('script[src*="jellyfin-plugin-media-bar"], script[src*="slideshowpure.js"]');
+    },
+
+    getDesktopMediaBarMode: function(profileName, resolved, raw) {
+        if (profileName !== 'desktop' || !this.hasParadoxMediaBar()) return null;
+        if (raw && raw.desktopMediaBarProvider) {
+            var saved = String(raw.desktopMediaBarProvider).toLowerCase();
+            if (saved === 'paradox' || saved === 'moonfin' || saved === 'off') return saved;
+        }
+        return resolved.mediaBarEnabled ? 'moonfin' : 'off';
+    },
+
+    toggleMediaBarSettingsVisibility: function(profileName, desktopMode) {
+        if (!this.dialog) return;
+
+        var hideMoonfinMediaBarSettings = profileName === 'desktop' && desktopMode === 'paradox';
+        var mediaBarSection = this.dialog.querySelector('.moonfin-panel-section[data-section="mediabar"]');
+
+        if (mediaBarSection) mediaBarSection.style.display = hideMoonfinMediaBarSettings ? 'none' : '';
+    },
+
     show: function() {
         if (this.isOpen) return;
 
@@ -325,7 +348,16 @@ var Settings = {
                 { value: 'top', label: 'Top' },
                 { value: 'left', label: 'Left (Sidebar)' }
             ], settings.navbarPosition) +
-            this.createToggleCard('mediaBarEnabled', 'Media Bar', 'Show the featured media carousel on the home page', settings.mediaBarEnabled) +
+            '<div class="moonfin-mediabar-toggle-wrap">' +
+                this.createToggleCard('mediaBarEnabled', 'Media Bar', 'Show the featured media carousel on the home page', settings.mediaBarEnabled) +
+            '</div>' +
+            '<div class="moonfin-desktop-mediabar-mode-wrap" style="display:none">' +
+                this.createSelectCard('desktopMediaBarProvider', 'Desktop Media Bar', 'Choose which media bar to use on desktop', [
+                    { value: 'paradox', label: 'Paradox Media Bar' },
+                    { value: 'moonfin', label: 'Moonfin Media Bar' },
+                    { value: 'off', label: 'Off' }
+                ], settings.mediaBarEnabled ? 'moonfin' : 'off') +
+            '</div>' +
             this.createToggleCard('detailsPageEnabled', 'Details Page', 'Use the custom Moonfin details page instead of the default Jellyfin one', settings.detailsPageEnabled);
 
         var mediaBarContent =
@@ -613,7 +645,7 @@ var Settings = {
                 profileInfoHtml +
                 '<div class="moonfin-settings-content">' +
                     this.createSection('', 'Moonfin UI', uiContent, true) +
-                    this.createSection('', 'Media Bar', mediaBarContent) +
+                    this.createSection('', 'Media Bar', mediaBarContent).replace('<details class="moonfin-panel-section"', '<details class="moonfin-panel-section" data-section="mediabar"') +
                     this.createSection('', 'Overlay Appearance', overlayContent) +
                     this.createSection('', 'Details Appearance', detailsContent) +
                     this.createSection('', 'Toolbar Buttons', toolbarContent) +
@@ -653,6 +685,7 @@ var Settings = {
         if (!this.dialog) return;
         var resolved = Storage.resolveSettings(profileName);
         var raw = (profileName !== 'global') ? Storage.getProfile(profileName) : null;
+        var desktopMode = this.getDesktopMediaBarMode(profileName, resolved, raw);
 
         // Update checkboxes
         var checkboxes = this.dialog.querySelectorAll('input[type="checkbox"][name]');
@@ -727,6 +760,21 @@ var Settings = {
         if (isCollection) this.loadCollectionPicker();
         if (!isCollection) this.loadLibraryPicker();
         this.loadGenrePicker();
+
+        var mediaBarToggleWrap = this.dialog.querySelector('.moonfin-mediabar-toggle-wrap');
+        var desktopModeWrap = this.dialog.querySelector('.moonfin-desktop-mediabar-mode-wrap');
+        if (mediaBarToggleWrap && desktopModeWrap) {
+            var showDesktopMode = desktopMode !== null;
+            mediaBarToggleWrap.style.display = showDesktopMode ? 'none' : '';
+            desktopModeWrap.style.display = showDesktopMode ? '' : 'none';
+
+            var desktopModeSelect = this.dialog.querySelector('select[name="desktopMediaBarProvider"]');
+            if (desktopModeSelect && showDesktopMode) {
+                desktopModeSelect.value = desktopMode;
+            }
+        }
+
+        this.toggleMediaBarSettingsVisibility(profileName, desktopMode);
 
         // Update profile info text
         var infoText = this.dialog.querySelector('.moonfin-profile-info-text');
@@ -961,6 +1009,16 @@ var Settings = {
         for (var j = 0; j < selects.length; j++) {
             (function(sel) {
                 sel.addEventListener('change', function() {
+                    if (sel.name === 'desktopMediaBarProvider') {
+                        var mode = String(sel.value || '').toLowerCase();
+                        if (mode !== 'paradox' && mode !== 'moonfin' && mode !== 'off') mode = 'off';
+                        self.saveSetting('desktopMediaBarProvider', mode);
+                        // Keep server payload behavior unchanged: only mediaBarEnabled (bool) matters.
+                        self.saveSetting('mediaBarEnabled', mode === 'moonfin' || mode === 'paradox');
+                        self.toggleMediaBarSettingsVisibility(Storage.getActiveEditProfile(), mode);
+                        self.showToast('Desktop media bar updated');
+                        return;
+                    }
                     var val = sel.value;
                     var numVal = parseInt(val, 10);
                     self.saveSetting(sel.name, isNaN(numVal) ? val : numVal);

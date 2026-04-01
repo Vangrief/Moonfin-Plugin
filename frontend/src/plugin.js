@@ -142,6 +142,43 @@ const Plugin = {
         document.body.dataset.moonfinDevice = device.type;
     },
 
+    getDesktopMediaBarProvider(settings) {
+        if (Device.getProfileName() !== 'desktop') return null;
+        var desktopProfile = Storage.getProfile('desktop') || {};
+        var provider = String(desktopProfile.desktopMediaBarProvider || '').toLowerCase();
+        if (provider === 'paradox' || provider === 'moonfin' || provider === 'off') {
+            return provider;
+        }
+        return settings.mediaBarEnabled ? 'moonfin' : 'off';
+    },
+
+    shouldUseMoonfinMediaBar(settings) {
+        var provider = this.getDesktopMediaBarProvider(settings);
+        if (provider === null) return !!settings.mediaBarEnabled;
+        return provider === 'moonfin';
+    },
+
+    shouldSuppressParadoxMediaBar(settings) {
+        var provider = this.getDesktopMediaBarProvider(settings);
+        return provider === 'off';
+    },
+
+    applyParadoxMediaBarSuppression(settings) {
+        var styleId = 'moonfin-paradox-mediabar-suppress-style';
+        var existing = document.getElementById(styleId);
+        if (!this.shouldSuppressParadoxMediaBar(settings)) {
+            if (existing) existing.remove();
+            return;
+        }
+
+        if (existing) return;
+        var style = document.createElement('style');
+        style.id = styleId;
+        style.textContent =
+            '#slides-container, #page-loader, .bar-loading { display: none !important; visibility: hidden !important; }';
+        document.head.appendChild(style);
+    },
+
     applyHomeRowOrder() {
         const homeRowOrder = Storage.get('homeRowOrder');
         if (!homeRowOrder || !homeRowOrder.length) return;
@@ -1081,9 +1118,13 @@ const Plugin = {
         this.setupDOMObserver();
 
         window.addEventListener('moonfin-settings-preview', (e) => {
+            var previewSettings = Object.assign({}, e.detail, {
+                mediaBarEnabled: this.shouldUseMoonfinMediaBar(e.detail)
+            });
+            this.applyParadoxMediaBarSuppression(e.detail);
             if (Navbar.initialized) Navbar.applySettings(e.detail);
             if (Sidebar.initialized) Sidebar.applySettings(e.detail);
-            MediaBar.applySettings(e.detail);
+            MediaBar.applySettings(previewSettings);
         });
 
         window.addEventListener('moonfin-settings-changed', (e) => {
@@ -1111,9 +1152,12 @@ const Plugin = {
                 if (Sidebar.initialized) Sidebar.destroy();
             }
 
-            if (e.detail.mediaBarEnabled && !MediaBar.initialized) {
+            this.applyParadoxMediaBarSuppression(e.detail);
+
+            var moonfinMediaBarEnabled = this.shouldUseMoonfinMediaBar(e.detail);
+            if (moonfinMediaBarEnabled && !MediaBar.initialized) {
                 MediaBar.init();
-            } else if (!e.detail.mediaBarEnabled && MediaBar.initialized) {
+            } else if (!moonfinMediaBarEnabled && MediaBar.initialized) {
                 MediaBar.destroy();
             }
         });
@@ -1190,6 +1234,14 @@ const Plugin = {
 
         if (this.checkUserChanged()) return;
 
+        var currentSettings = Storage.getAll();
+        this.applyParadoxMediaBarSuppression(currentSettings);
+        var moonfinMediaBarEnabled = this.shouldUseMoonfinMediaBar(currentSettings);
+
+        if (!moonfinMediaBarEnabled && MediaBar.initialized) {
+            MediaBar.destroy();
+        }
+
         if (Navbar.container) {
             var navbarEnabled = Storage.get('navbarEnabled') && Storage.get('navbarPosition') !== 'left';
             Navbar.container.classList.toggle('hidden', !navbarEnabled);
@@ -1205,7 +1257,7 @@ const Plugin = {
 
         document.querySelectorAll('.moonfin-seasonal-effect').forEach(el => el.style.display = '');
 
-        if (MediaBar.initialized && MediaBar.container) {
+        if (moonfinMediaBarEnabled && MediaBar.initialized && MediaBar.container) {
             MediaBar.ensureInDOM();
 
             var showMediaBar = this.isHomePage();
