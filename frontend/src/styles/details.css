@@ -248,6 +248,12 @@ body.moonfin-navbar-active .moonfin-details-back {
     color: #fff;
 }
 
+.moonfin-badge-codec {
+    background: rgba(255, 255, 255, 0.14);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
 .moonfin-tagline {
     font-style: italic;
     color: rgba(255, 255, 255, 0.6);

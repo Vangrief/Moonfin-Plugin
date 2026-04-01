@@ -1038,9 +1038,19 @@ var Details = {
                 if (video.VideoDoViTitle || (video.Title && video.Title.indexOf('Dolby Vision') !== -1)) {
                     badges.push('<span class="moonfin-badge moonfin-badge-dv">DV</span>');
                 }
+
+                var videoCodecLabel = this.getCodecBadgeLabel(video.Codec, 'Video');
+                if (videoCodecLabel) {
+                    badges.push('<span class="moonfin-badge moonfin-badge-codec">' + videoCodecLabel + '</span>');
+                }
             }
             
             if (audio) {
+                var audioCodecLabel = this.getCodecBadgeLabel(audio.Codec, 'Audio');
+                if (audioCodecLabel) {
+                    badges.push('<span class="moonfin-badge moonfin-badge-codec">' + audioCodecLabel + '</span>');
+                }
+
                 if ((audio.DisplayTitle && audio.DisplayTitle.indexOf('Atmos') !== -1) || (audio.Profile && audio.Profile.indexOf('Atmos') !== -1)) {
                     badges.push('<span class="moonfin-badge moonfin-badge-atmos">ATMOS</span>');
                 } else if ((audio.DisplayTitle && audio.DisplayTitle.indexOf('DTS:X') !== -1) || (audio.Profile && audio.Profile.indexOf('DTS:X') !== -1)) {
@@ -1052,6 +1062,24 @@ var Details = {
         }
         
         return badges;
+    },
+
+    getCodecBadgeLabel: function(codec, streamType) {
+        if (!codec) return '';
+
+        var normalized = String(codec).toUpperCase();
+
+        if (streamType === 'Video') {
+            if (normalized === 'H264' || normalized === 'AVC') return 'H.264';
+            if (normalized === 'H265' || normalized === 'HEVC') return 'HEVC';
+        }
+
+        if (streamType === 'Audio') {
+            if (normalized === 'EAC3') return 'E-AC3';
+            if (normalized === 'TRUEHD') return 'TRUEHD';
+        }
+
+        return normalized;
     },
 
     formatRuntime: function(ticks) {
