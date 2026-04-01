@@ -16,6 +16,9 @@ const Storage = {
         adminDefaults: null
     },
 
+    _initialSyncDone: false,
+    _initialSyncPromise: null,
+
     defaults: {
         navbarEnabled: false,
         detailsPageEnabled: false,
@@ -720,24 +723,36 @@ const Storage = {
         this.saveSnapshot(merged);
     },
 
-    initSync() {
-        if (this._initialSyncDone) return;
+    _runInitialSync() {
+        return this.sync().catch(() => {}).finally(() => {
+            this._initialSyncPromise = null;
+        });
+    },
+
+    async initSync() {
+        if (this._initialSyncPromise) return this._initialSyncPromise;
+        if (this._initialSyncDone) return Promise.resolve();
+
         this._initialSyncDone = true;
 
         // Migrate legacy flat settings
         this._migrateFromLegacy();
 
         if (window.ApiClient?.isLoggedIn?.()) {
-            setTimeout(() => this.sync(), 2000);
-        } else {
-            const onLogin = () => {
-                if (window.ApiClient?.isLoggedIn?.()) {
-                    document.removeEventListener('viewshow', onLogin);
-                    setTimeout(() => this.sync(), 2000);
-                }
-            };
-            document.addEventListener('viewshow', onLogin);
+            this._initialSyncPromise = this._runInitialSync();
+            return this._initialSyncPromise;
         }
+
+        const onLogin = () => {
+            if (!window.ApiClient?.isLoggedIn?.()) return;
+            document.removeEventListener('viewshow', onLogin);
+            if (!this._initialSyncPromise) {
+                this._initialSyncPromise = this._runInitialSync();
+            }
+        };
+        document.addEventListener('viewshow', onLogin);
+
+        return Promise.resolve();
     },
 
     getSyncStatus() {
@@ -755,6 +770,7 @@ const Storage = {
         localStorage.removeItem(this.SNAPSHOT_KEY);
         localStorage.removeItem(this.USER_ID_KEY);
         this._initialSyncDone = false;
+        this._initialSyncPromise = null;
         this._activeEditProfile = 'global';
         this.syncState.serverAvailable = null;
         this.syncState.lastSyncTime = null;
@@ -769,8 +785,14 @@ const Storage = {
         if (!currentUserId) return;
         const storedUserId = localStorage.getItem(this.USER_ID_KEY);
         if (storedUserId && storedUserId !== currentUserId) {
-            console.log('[Moonfin] localStorage belongs to a different user, clearing...');
-            this.resetForNewUser();
+            localStorage.removeItem(this.SNAPSHOT_KEY);
+            this._initialSyncDone = false;
+            this._initialSyncPromise = null;
+            this.syncState.serverAvailable = null;
+            this.syncState.lastSyncTime = null;
+            this.syncState.lastSyncError = null;
+            this.syncState.syncing = false;
+            this.syncState.adminDefaults = null;
         }
         localStorage.setItem(this.USER_ID_KEY, currentUserId);
     }

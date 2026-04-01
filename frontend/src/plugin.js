@@ -90,7 +90,7 @@ const Plugin = {
         this._currentUserId = this._getLoggedInUserId();
 
         Storage.checkUserOwnership(this._currentUserId);
-        Storage.initSync();
+        await Storage.initSync();
 
         try {
             var settings = Storage.getAll();
