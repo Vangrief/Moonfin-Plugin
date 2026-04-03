@@ -107,6 +107,15 @@ Moonfin uses the [File Transformation](https://github.com/IAmParadox27/jellyfin-
 
 > **UI not loading?** Go to *Dashboard → Scheduled Tasks* and run the **Moonfin Startup** task once, then refresh your browser.
 
+### **Don't want the logo?** 
+Add these CSS lines on Branding/Custom CSS:
+
+```
+.headerMoonfinButton {
+display: none !important;
+}
+```
+
 ## Configuration
 
 ### Admin Settings
