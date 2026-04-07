@@ -160,9 +160,11 @@ var MdbList = {
             case 'metacriticuser':
                 // Percentage-based
                 return score != null ? score.toFixed(0) + '%' : (value != null ? value.toFixed(0) + '%' : null);
-            case 'letterboxd':
-                // Letterboxd: 0-5 scale (value), score is 0-100
-                return value != null ? value.toFixed(1) + '/5' : (score != null ? (score / 20).toFixed(1) + '/5' : null);
+            case 'letterboxd': {
+                // Letterboxd: 0-5 native scale. Values cached before v1.7.0 may be on 0-10 scale; halve if needed.
+                if (value != null) return (value > 5 ? value / 2 : value).toFixed(1) + '/5';
+                return score != null ? (score / 20).toFixed(1) + '/5' : null;
+            }
             case 'trakt':
                 // Trakt: percentage
                 return score != null ? score.toFixed(0) + '%' : null;
