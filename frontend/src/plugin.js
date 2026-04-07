@@ -1489,11 +1489,22 @@ const Plugin = {
         const isUserLoggedIn = () => {
             try {
                 const api = window.ApiClient || (window.connectionManager && window.connectionManager.currentApiClient());
-                return api && 
-                       api._currentUser && 
-                       api._currentUser.Id &&
-                       api._serverInfo && 
-                       api._serverInfo.AccessToken;
+                if (!api) return false;
+
+                // Prefer stable public methods over private internals that may change across Jellyfin releases.
+                if (typeof api.isLoggedIn === 'function') {
+                    return !!api.isLoggedIn();
+                }
+
+                const userId = typeof api.getCurrentUserId === 'function'
+                    ? api.getCurrentUserId()
+                    : (api._currentUser && api._currentUser.Id);
+
+                const token = typeof api.accessToken === 'function'
+                    ? api.accessToken()
+                    : (api._serverInfo && api._serverInfo.AccessToken);
+
+                return !!(userId && token);
             } catch (e) {
                 return false;
             }
@@ -1510,7 +1521,6 @@ const Plugin = {
                 console.log('[Moonfin] User authenticated, initializing...');
                 Plugin.init();
             } else {
-                console.log('[Moonfin] Waiting for user authentication...');
                 setTimeout(initWhenReady, 500);
             }
         };

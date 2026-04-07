@@ -7,30 +7,48 @@
 
   console.log("Moonfin loader starting...");
 
-  var baseUrl = "/Moonfin/Web/";
+  function resolveMoonfinBase() {
+    try {
+      var api = window.ApiClient || (window.connectionManager && window.connectionManager.currentApiClient());
+      if (api && typeof api.serverAddress === "function") {
+        var server = api.serverAddress() || "";
+        if (server) {
+          // Keep only the pathname so asset URLs stay same-origin.
+          var parsed = new URL(server, window.location.origin);
+          var prefix = (parsed.pathname || "").replace(/\/$/, "");
+          return prefix + "/Moonfin";
+        }
+      }
+    } catch (e) {}
+
+    // Fallback when ApiClient is not yet available.
+    var path = window.location.pathname || "";
+    var webIdx = path.toLowerCase().lastIndexOf("/web/");
+    if (webIdx >= 0) {
+      return path.substring(0, webIdx) + "/Moonfin";
+    }
+
+    return "/Moonfin";
+  }
+
+  var moonfinBase = resolveMoonfinBase();
+  var baseUrl = moonfinBase + "/Web/";
   var cacheBust = "?v=" + Date.now();
 
-  // Load CSS
   var css = document.createElement("link");
   css.rel = "stylesheet";
   css.type = "text/css";
   css.href = baseUrl + "plugin.css" + cacheBust;
   document.head.appendChild(css);
-  console.log("Moonfin CSS loaded");
 
-  // Load JS
   var script = document.createElement("script");
   script.type = "text/javascript";
   script.src = baseUrl + "plugin.js" + cacheBust;
-  script.onload = function () {
-    console.log("Moonfin plugin.js loaded successfully");
-  };
   script.onerror = function () {
-    console.error("Failed to load Moonfin plugin.js");
+    console.error("Failed to load Moonfin plugin.js from " + script.src);
   };
   document.head.appendChild(script);
 
-  // ── Inject header button ────────────────────────────────────────
   function injectHeaderButton() {
     if (document.querySelector(".headerMoonfinButton")) return;
 
@@ -45,7 +63,7 @@
     btn.className = "headerButton headerButtonRight headerMoonfinButton";
     btn.title = "Moonfin Settings";
     btn.innerHTML =
-      '<img src="/Moonfin/Assets/icon.png" ' +
+      '<img src="' + moonfinBase + '/Assets/icon.png" ' +
       'style="width:24px;height:24px;border-radius:4px;vertical-align:middle" ' +
       'alt="Moonfin">';
     btn.addEventListener("click", function () {
@@ -61,7 +79,6 @@
     }
   }
 
-  // Wait for the header to render before injecting the button
   if (document.readyState === "complete") {
     setTimeout(injectHeaderButton, 200);
   } else {

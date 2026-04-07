@@ -25,7 +25,7 @@ public static class TransformationPatches
 
         if (stream == null)
         {
-            var fallbackScript = "<script src=\"/Moonfin/Web/loader.js\"></script>";
+            var fallbackScript = "<script src=\"../Moonfin/Web/loader.js\"></script>";
             return Regex.Replace(payload.Contents, "(</head>)", $"{fallbackScript}$1");
         }
 

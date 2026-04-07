@@ -266,12 +266,9 @@ public class JellyseerrProxyController : ControllerBase
             : null);
     }
 
-    // ── Seerr Web Proxy (iframe auth) ──────────────────────────────
+    private const string ProxyBasePathSuffix = "/Moonfin/Jellyseerr/Web";
 
-    private const string ProxyBasePath = "/Moonfin/Jellyseerr/Web";
-
-    // Short-lived proxy sessions: token → (userId, expiry)
-    // Allows iframe sub-resource loads without api_key in every URL
+    // Short-lived proxy sessions keyed by token, allowing iframe sub-resource loads without api_key in every URL.
     private static readonly ConcurrentDictionary<string, (Guid UserId, DateTimeOffset Expiry)> _proxySessions = new();
 
     /// <summary>
@@ -287,19 +284,16 @@ public class JellyseerrProxyController : ControllerBase
     [AcceptVerbs("GET", "POST", "PUT", "DELETE")]
     public async Task<IActionResult> ProxyWeb(string? path = null)
     {
-        // Authenticate: proxy session cookie first, then Jellyfin auth (api_key)
         var userId = GetProxySessionUserId() ?? GetJellyfinAuthUserId();
         if (userId == null)
         {
             return Unauthorized("Authentication required");
         }
 
-        // Set/refresh proxy session cookie for subsequent requests
         EnsureProxySession(userId.Value);
 
         var method = new HttpMethod(Request.Method);
 
-        // Read body for POST/PUT
         byte[]? body = null;
         string? contentType = null;
         if (method == HttpMethod.Post || method == HttpMethod.Put)
@@ -329,16 +323,17 @@ public class JellyseerrProxyController : ControllerBase
         {
             var config = MoonfinPlugin.Instance?.Configuration;
             var configuredPublicUrl = config?.JellyseerrUrl?.TrimEnd('/') ?? string.Empty;
-            var assetBaseHref = ResolveAssetBaseHref(configuredPublicUrl);
+            var proxyBasePath = GetProxyBasePath();
+            var assetBaseHref = ResolveAssetBaseHref(configuredPublicUrl, proxyBasePath);
             var html = Encoding.UTF8.GetString(result.Body);
-            html = RewriteHtmlForProxy(html, assetBaseHref);
+            html = RewriteHtmlForProxy(html, assetBaseHref, proxyBasePath);
             return Content(html, "text/html; charset=utf-8");
         }
 
         if (result.ContentType.Contains("text/css", StringComparison.OrdinalIgnoreCase))
         {
             var css = Encoding.UTF8.GetString(result.Body);
-            css = RewriteCssForProxy(css);
+            css = RewriteCssForProxy(css, GetProxyBasePath());
             return File(Encoding.UTF8.GetBytes(css), result.ContentType);
         }
 
@@ -366,7 +361,6 @@ public class JellyseerrProxyController : ControllerBase
 
     private void EnsureProxySession(Guid userId)
     {
-        // If a valid proxy session cookie already exists, skip
         var existingCookie = Request.Cookies["moonfin_proxy"];
         if (!string.IsNullOrEmpty(existingCookie)
             && _proxySessions.TryGetValue(existingCookie, out var existing)
@@ -375,7 +369,7 @@ public class JellyseerrProxyController : ControllerBase
             return;
         }
 
-        // Clean expired sessions periodically
+        // Periodically evict expired entries to prevent unbounded growth.
         var now = DateTimeOffset.UtcNow;
         if (_proxySessions.Count > 100)
         {
@@ -386,7 +380,6 @@ public class JellyseerrProxyController : ControllerBase
             }
         }
 
-        // Remove stale cookie from dictionary if present
         if (!string.IsNullOrEmpty(existingCookie))
         {
             _proxySessions.TryRemove(existingCookie, out _);
@@ -395,14 +388,23 @@ public class JellyseerrProxyController : ControllerBase
         var token = Guid.NewGuid().ToString("N");
         _proxySessions[token] = (userId, now.AddHours(12));
 
+        var proxyBasePath = GetProxyBasePath();
         Response.Cookies.Append("moonfin_proxy", token, new CookieOptions
         {
             HttpOnly = true,
             SameSite = SameSiteMode.Strict,
-            Path = ProxyBasePath,
+            Path = proxyBasePath,
             MaxAge = TimeSpan.FromHours(12),
             Secure = Request.IsHttps
         });
+    }
+
+    private string GetProxyBasePath()
+    {
+        var pathBase = Request.PathBase.HasValue
+            ? (Request.PathBase.Value?.TrimEnd('/') ?? string.Empty)
+            : string.Empty;
+        return pathBase + ProxyBasePathSuffix;
     }
 
     private static string? StripQueryParam(string? queryString, string param)
@@ -416,23 +418,23 @@ public class JellyseerrProxyController : ControllerBase
         return parts.Length > 0 ? "?" + string.Join("&", parts) : null;
     }
 
-    private string ResolveAssetBaseHref(string configuredPublicUrl)
+    private string ResolveAssetBaseHref(string configuredPublicUrl, string proxyBasePath)
     {
         // Cross-origin asset bases (e.g., Jellyfin at :8096, Seerr at :5055) can fail
         // for fonts/CSP/history in iframe contexts. In that case, keep assets on proxy.
         if (string.IsNullOrEmpty(configuredPublicUrl))
         {
-            return ProxyBasePath + "/";
+            return proxyBasePath + "/";
         }
 
         if (!Uri.TryCreate(configuredPublicUrl, UriKind.Absolute, out var configuredUri))
         {
-            return ProxyBasePath + "/";
+            return proxyBasePath + "/";
         }
 
         if (!IsSameOrigin(configuredUri, Request.Scheme, Request.Host))
         {
-            return ProxyBasePath + "/";
+            return proxyBasePath + "/";
         }
 
         return configuredPublicUrl + "/";
@@ -454,23 +456,24 @@ public class JellyseerrProxyController : ControllerBase
         return uri.Port == expectedPort;
     }
 
-    private static string RewriteHtmlForProxy(string html, string assetBaseHref)
+    private static string RewriteHtmlForProxy(string html, string assetBaseHref, string proxyBasePath)
     {
         html = Regex.Replace(
             html,
             "(?<attr>\\b(?:src|href)\\s*=\\s*[\"'])/(?!(?:/|Moonfin/))",
-            "$1" + ProxyBasePath + "/",
+            "$1" + proxyBasePath + "/",
             RegexOptions.IgnoreCase);
 
+        var escapedPath = proxyBasePath.TrimStart('/').Replace("/", "\\/");
         html = html
-            .Replace("\\/_next\\/", "\\/Moonfin\\/Jellyseerr\\/Web\\/_next\\/", StringComparison.Ordinal)
-            .Replace("\"/_next/", $"\"{ProxyBasePath}/_next/", StringComparison.Ordinal)
-            .Replace("'/_next/", $"'{ProxyBasePath}/_next/", StringComparison.Ordinal)
-            .Replace("=/_next/", $"={ProxyBasePath}/_next/", StringComparison.Ordinal)
-            .Replace("\\/imageproxy\\/", "\\/Moonfin\\/Jellyseerr\\/Web\\/imageproxy\\/", StringComparison.Ordinal)
-            .Replace("\"/imageproxy/", $"\"{ProxyBasePath}/imageproxy/", StringComparison.Ordinal)
-            .Replace("'/imageproxy/", $"'{ProxyBasePath}/imageproxy/", StringComparison.Ordinal)
-            .Replace("=/imageproxy/", $"={ProxyBasePath}/imageproxy/", StringComparison.Ordinal);
+            .Replace("\\/_next\\/", $"\\/{escapedPath}\\/_next\\/", StringComparison.Ordinal)
+            .Replace("\"/_next/", $"\"{proxyBasePath}/_next/", StringComparison.Ordinal)
+            .Replace("'/_next/", $"'{proxyBasePath}/_next/", StringComparison.Ordinal)
+            .Replace("=/_next/", $"={proxyBasePath}/_next/", StringComparison.Ordinal)
+            .Replace("\\/imageproxy\\/", $"\\/{escapedPath}\\/imageproxy\\/", StringComparison.Ordinal)
+            .Replace("\"/imageproxy/", $"\"{proxyBasePath}/imageproxy/", StringComparison.Ordinal)
+            .Replace("'/imageproxy/", $"'{proxyBasePath}/imageproxy/", StringComparison.Ordinal)
+            .Replace("=/imageproxy/", $"={proxyBasePath}/imageproxy/", StringComparison.Ordinal);
 
         var headIdx = html.IndexOf("<head", StringComparison.OrdinalIgnoreCase);
         if (headIdx >= 0)
@@ -481,33 +484,35 @@ public class JellyseerrProxyController : ControllerBase
                 var baseTag = !string.IsNullOrEmpty(assetBaseHref)
                     ? $"<base href=\"{assetBaseHref}\">"
                     : string.Empty;
-                html = html.Insert(closeIdx + 1, baseTag + ProxyScript);
+                html = html.Insert(closeIdx + 1, baseTag + GetProxyScript(proxyBasePath));
             }
         }
 
         return html;
     }
 
-    private static string RewriteCssForProxy(string css)
+    private static string RewriteCssForProxy(string css, string proxyBasePath)
     {
         css = Regex.Replace(
             css,
             "url\\(\\s*(['\\\"]?)\\/(?!\\/|Moonfin\\/)",
-            $"url($1{ProxyBasePath}/",
+            $"url($1{proxyBasePath}/",
             RegexOptions.IgnoreCase);
 
         css = Regex.Replace(
             css,
             "@import\\s+(['\\\"])\\/(?!\\/|Moonfin\\/)",
-            $"@import $1{ProxyBasePath}/",
+            $"@import $1{proxyBasePath}/",
             RegexOptions.IgnoreCase);
 
         return css;
     }
 
-    // Intercepts fetch/XHR/history and rewrites static asset/navigation URLs for proxy mode.
-    private const string ProxyScript = @"<script data-moonfin-proxy>(function(){
-var b='/Moonfin/Jellyseerr/Web';
+    private static string GetProxyScript(string proxyBasePath)
+    {
+        var escapedBasePath = proxyBasePath.Replace("'", "\\'");
+        const string scriptTemplate = @"<script data-moonfin-proxy>(function(){
+var b='__MOONFIN_PROXY_BASE__';
 function r(v){return typeof v==='string'&&v.length>1&&v[0]==='/'&&v[1]!=='/'&&v.indexOf(b)!==0?b+v:v}
 
 var F=window.fetch;window.fetch=function(u,o){if(typeof u==='string')return F.call(this,r(u),o);if(u instanceof Request)return F.call(this,new Request(r(u.url),u),o);return F.call(this,u,o)};
@@ -561,6 +566,9 @@ document.addEventListener('click',function(e){
     }
 },true);
 })()</script>";
+
+        return scriptTemplate.Replace("__MOONFIN_PROXY_BASE__", escapedBasePath, StringComparison.Ordinal);
+    }
 }
 
 /// <summary>
