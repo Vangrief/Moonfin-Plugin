@@ -241,7 +241,6 @@ public class JellyseerrProxyController : ControllerBase
             return Unauthorized(new { error = "User not authenticated" });
         }
 
-        // Read request body for POST/PUT
         byte[]? body = null;
         string? contentType = null;
 
@@ -261,9 +260,17 @@ public class JellyseerrProxyController : ControllerBase
             body,
             contentType);
 
-        return StatusCode(result.StatusCode, result.Body != null
-            ? new FileContentResult(result.Body, result.ContentType)
-            : null);
+        if (result.Body == null)
+        {
+            return StatusCode(result.StatusCode);
+        }
+
+        var responseContentType = string.IsNullOrWhiteSpace(result.ContentType)
+            ? MediaTypeNames.Application.Octet
+            : result.ContentType;
+
+        Response.StatusCode = result.StatusCode;
+        return File(result.Body, responseContentType);
     }
 
     private const string ProxyBasePathSuffix = "/Moonfin/Jellyseerr/Web";
@@ -319,7 +326,11 @@ public class JellyseerrProxyController : ControllerBase
             return StatusCode(result.StatusCode);
         }
 
-        if (result.ContentType.Contains("text/html", StringComparison.OrdinalIgnoreCase))
+        var responseContentType = string.IsNullOrWhiteSpace(result.ContentType)
+            ? MediaTypeNames.Application.Octet
+            : result.ContentType;
+
+        if (responseContentType.Contains("text/html", StringComparison.OrdinalIgnoreCase))
         {
             var config = MoonfinPlugin.Instance?.Configuration;
             var configuredPublicUrl = config?.JellyseerrUrl?.TrimEnd('/') ?? string.Empty;
@@ -327,17 +338,24 @@ public class JellyseerrProxyController : ControllerBase
             var assetBaseHref = ResolveAssetBaseHref(configuredPublicUrl, proxyBasePath);
             var html = Encoding.UTF8.GetString(result.Body);
             html = RewriteHtmlForProxy(html, assetBaseHref, proxyBasePath);
-            return Content(html, "text/html; charset=utf-8");
+            return new ContentResult
+            {
+                Content = html,
+                ContentType = "text/html; charset=utf-8",
+                StatusCode = result.StatusCode
+            };
         }
 
-        if (result.ContentType.Contains("text/css", StringComparison.OrdinalIgnoreCase))
+        if (responseContentType.Contains("text/css", StringComparison.OrdinalIgnoreCase))
         {
             var css = Encoding.UTF8.GetString(result.Body);
             css = RewriteCssForProxy(css, GetProxyBasePath());
-            return File(Encoding.UTF8.GetBytes(css), result.ContentType);
+            Response.StatusCode = result.StatusCode;
+            return File(Encoding.UTF8.GetBytes(css), responseContentType);
         }
 
-        return File(result.Body, result.ContentType);
+        Response.StatusCode = result.StatusCode;
+        return File(result.Body, responseContentType);
     }
 
     private Guid? GetProxySessionUserId()
