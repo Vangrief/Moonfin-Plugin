@@ -756,6 +756,10 @@ const Storage = {
         } else if (hasLocalProfiles) {
             merged = localProfiles;
         } else {
+            const adminDefaults = this.syncState.adminDefaults;
+            if (adminDefaults && Object.keys(adminDefaults).length > 0) {
+                window.dispatchEvent(new CustomEvent('moonfin-settings-changed', { detail: this.getAll() }));
+            }
             return;
         }
 
