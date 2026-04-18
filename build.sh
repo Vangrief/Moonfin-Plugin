@@ -74,6 +74,7 @@ EOF
 
 # Create the ZIP file
 ZIP_NAME="Moonfin.Server-${VERSION}.zip"
+rm -f "$ROOT_DIR/$ZIP_NAME"
 cd "$RELEASE_DIR"
 zip -r "$ROOT_DIR/$ZIP_NAME" .
 cd "$ROOT_DIR"

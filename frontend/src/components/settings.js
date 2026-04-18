@@ -255,7 +255,9 @@ var Settings = {
         };
 
         listElement.addEventListener('dragstart', function(e) {
-            if (!e.target.closest('.moonfin-sortable-handle')) {
+            const interactive = e.target.closest('input, button, select, textarea, a, label');
+            const isHandle = !!e.target.closest('.moonfin-sortable-handle');
+            if (interactive && !isHandle) {
                 e.preventDefault();
                 return;
             }
@@ -1077,8 +1079,7 @@ var Settings = {
                         var mode = String(sel.value || '').toLowerCase();
                         if (mode !== 'paradox' && mode !== 'moonfin' && mode !== 'off') mode = 'off';
                         self.saveSetting('desktopMediaBarProvider', mode);
-                        // Keep server payload behavior unchanged: only mediaBarEnabled (bool) matters.
-                        self.saveSetting('mediaBarEnabled', mode === 'moonfin' || mode === 'paradox');
+                        self.saveSetting('mediaBarEnabled', mode === 'moonfin');
                         self.toggleMediaBarSettingsVisibility(Storage.getActiveEditProfile(), mode);
                         self.showToast('Desktop media bar updated');
                         return;

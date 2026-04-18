@@ -114,16 +114,19 @@ const Storage = {
         try {
             const profiles = this.getProfiles();
             profiles[profileName] = settings;
-            localStorage.setItem(this.PROFILES_KEY, JSON.stringify(profiles));
+            const normalizedProfiles = this._normalizeProfilesForInheritance(profiles);
+            localStorage.setItem(this.PROFILES_KEY, JSON.stringify(normalizedProfiles));
 
             const dispatchChange = () => {
                 window.dispatchEvent(new CustomEvent('moonfin-settings-changed', { detail: this.getAll() }));
             };
 
             if (syncToServer && this.syncState.serverAvailable && this.isSyncEnabled()) {
-                // Dispatch after server sync so components re-fetching from the
-                // server (e.g. MediaBar) get up-to-date data
-                this.saveProfileToServer(profileName, settings).then(dispatchChange);
+                const syncPromise = profileName === 'global'
+                    ? this.saveAllProfilesToServer(normalizedProfiles)
+                    : this.saveProfileToServer(profileName, settings);
+
+                syncPromise.then(dispatchChange);
             } else {
                 dispatchChange();
             }
@@ -353,6 +356,7 @@ const Storage = {
         try {
             this.syncState.syncing = true;
             const serverUrl = window.ApiClient?.serverAddress?.() || '';
+            profiles = this._normalizeProfilesForInheritance(profiles || {});
             
             const envelope = this._mapEnvelopeToServer(profiles);
             envelope.syncEnabled = this.isSyncEnabled();
@@ -373,7 +377,6 @@ const Storage = {
             if (response.ok) {
                 this.syncState.lastSyncTime = Date.now();
                 this.syncState.lastSyncError = null;
-                console.log('[Moonfin] All profiles saved to server');
                 return true;
             }
         } catch (e) {
@@ -384,6 +387,46 @@ const Storage = {
         }
         
         return false;
+    },
+
+    _normalizeProfilesForInheritance(profiles) {
+        const normalized = {};
+        const global = (profiles && profiles.global && typeof profiles.global === 'object')
+            ? profiles.global
+            : null;
+
+        const profileNames = Object.keys(profiles || {});
+        for (let i = 0; i < profileNames.length; i++) {
+            const name = profileNames[i];
+            const input = profiles[name];
+
+            if (!input || typeof input !== 'object') continue;
+
+            if (name === 'global' || !global || (name !== 'desktop' && name !== 'mobile' && name !== 'tv')) {
+                normalized[name] = { ...input };
+                continue;
+            }
+
+            const cleaned = {};
+            const keys = Object.keys(input);
+            for (let k = 0; k < keys.length; k++) {
+                const key = keys[k];
+                const value = input[key];
+                if (value === undefined || value === null) continue;
+
+                if (global[key] !== undefined && this._deepEqual(value, global[key])) {
+                    continue;
+                }
+
+                cleaned[key] = value;
+            }
+
+            if (Object.keys(cleaned).length > 0) {
+                normalized[name] = cleaned;
+            }
+        }
+
+        return normalized;
     },
 
     async saveProfileToServer(profileName, profileSettings) {
@@ -448,6 +491,7 @@ const Storage = {
     _mapProfileFromServer(serverProfile) {
         if (!serverProfile) return {};
         var mapping = {
+            desktopMediaBarProvider: 'desktopMediaBarProvider',
             navbarEnabled: 'navbarEnabled',
             detailsPageEnabled: 'detailsPageEnabled',
             detailsBackdropOpacity: 'detailsBackdropOpacity',
@@ -502,6 +546,7 @@ const Storage = {
     _mapProfileToServer(localProfile) {
         if (!localProfile) return {};
         return {
+            desktopMediaBarProvider: localProfile.desktopMediaBarProvider,
             navbarEnabled: localProfile.navbarEnabled,
             detailsPageEnabled: localProfile.detailsPageEnabled,
             detailsBackdropOpacity: localProfile.detailsBackdropOpacity,
@@ -636,9 +681,9 @@ const Storage = {
                 if (localVal !== undefined) merged[key] = localVal;
             } else if (serverChanged && !localChanged) {
                 if (serverVal !== undefined) merged[key] = serverVal;
+                else if (localVal !== undefined) merged[key] = localVal;
             } else if (localChanged && serverChanged) {
                 if (localVal !== undefined) merged[key] = localVal;
-                console.log('[Moonfin] Merge conflict on "' + key + '" — local wins');
             } else {
                 if (localVal !== undefined) merged[key] = localVal;
             }
@@ -693,16 +738,9 @@ const Storage = {
         let merged;
 
         if (forceFromServer && serverProfiles) {
-            // Server wins — overwrite local with server profiles
-            merged = {};
-            const allNames = new Set([...Object.keys(localProfiles), ...Object.keys(serverProfiles)]);
-            for (const name of allNames) {
-                merged[name] = { ...(localProfiles[name] || {}), ...(serverProfiles[name] || {}) };
-            }
-            console.log('[Moonfin] Applied server profiles (manual sync)');
+            merged = this._normalizeProfilesForInheritance(serverProfiles);
         } else if (serverProfiles && hasLocalProfiles && snapshot) {
             merged = this.threeWayMergeProfiles(localProfiles, serverProfiles, snapshot);
-            console.log('[Moonfin] Three-way merged profiles');
         } else if (serverProfiles && hasLocalProfiles && !snapshot) {
             // First sync — local wins for conflicts
             merged = {};
@@ -710,18 +748,17 @@ const Storage = {
             for (const name of allNames) {
                 merged[name] = { ...(serverProfiles[name] || {}), ...(localProfiles[name] || {}) };
             }
-            console.log('[Moonfin] First sync — local wins, pushed to server');
         } else if (serverProfiles && !hasLocalProfiles) {
             merged = serverProfiles;
-            console.log('[Moonfin] Restored profiles from server (fresh install)');
         } else if (hasLocalProfiles) {
             merged = localProfiles;
-            console.log('[Moonfin] Pushed local profiles to server');
         } else {
             return;
         }
 
-        // Save locally without triggering sync
+        merged = this._normalizeProfilesForInheritance(merged);
+
+        // Update local state
         try {
             localStorage.setItem(this.PROFILES_KEY, JSON.stringify(merged));
             window.dispatchEvent(new CustomEvent('moonfin-settings-changed', { detail: this.getAll() }));

@@ -18,7 +18,9 @@ var MediaBar = {
 
     async init() {
         var settings = Storage.getAll();
-        if (!settings.mediaBarEnabled) {
+        var desktopProvider = String((Storage.getProfile('desktop') || {}).desktopMediaBarProvider || '').toLowerCase();
+        var enabled = settings.mediaBarEnabled || desktopProvider === 'moonfin';
+        if (!enabled) {
             document.body.classList.remove('moonfin-mediabar-active');
             return;
         }

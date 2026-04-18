@@ -24,11 +24,21 @@ const Plugin = {
         // plugin stays out of the way and never blocks the admin panel.
         const userRoutes = [
             '#/home',
+            '#/index',
             '#/movies',
             '#/tvshows',
+            '#/tv',
             '#/music',
             '#/livetv',
             '#/details',
+            '#/item',
+            '#/library',
+            '#/genre',
+            '#/person',
+            '#/collection',
+            '#/boxset',
+            '#/studio',
+            '#/folders',
             '#/search',
             '#/favorites',
             '#/list',
@@ -103,7 +113,9 @@ const Plugin = {
                 }
             }
 
-            if (settings.mediaBarEnabled) {
+            this.applyParadoxMediaBarSuppression(settings);
+
+            if (this.shouldUseMoonfinMediaBar(settings)) {
                 MediaBar.init();
             }
 
@@ -156,7 +168,7 @@ const Plugin = {
 
     shouldSuppressParadoxMediaBar(settings) {
         var provider = this.getDesktopMediaBarProvider(settings);
-        return provider === 'off';
+        return provider === 'off' || provider === 'moonfin';
     },
 
     applyParadoxMediaBarSuppression(settings) {
@@ -171,7 +183,8 @@ const Plugin = {
         var style = document.createElement('style');
         style.id = styleId;
         style.textContent =
-            '#slides-container, #page-loader, .bar-loading { display: none !important; visibility: hidden !important; }';
+            '#slides-container, #page-loader, .bar-loading { display: none !important; visibility: hidden !important; }' +
+            'body:not(.moonfin-mediabar-active) .homeSectionsContainer { top: 0 !important; }';
         document.head.appendChild(style);
     },
 

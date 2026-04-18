@@ -9,6 +9,9 @@ namespace Moonfin.Server.Models;
 /// </summary>
 public class MoonfinSettingsProfile
 {
+    [JsonPropertyName("desktopMediaBarProvider")]
+    public string? DesktopMediaBarProvider { get; set; }
+
     [JsonPropertyName("jellyseerrEnabled")]
     public bool? JellyseerrEnabled { get; set; }
 

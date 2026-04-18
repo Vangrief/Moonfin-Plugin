@@ -38,6 +38,10 @@ public class MoonfinController : ControllerBase
     private static readonly MethodInfo? _userManagerGetUserById = _userManagerType?.GetMethod("GetUserById", [typeof(Guid)]);
     private static readonly MethodInfo? _internalItemsQuerySetUser = typeof(InternalItemsQuery).GetMethod("SetUser", BindingFlags.Public | BindingFlags.Instance);
     private static readonly PropertyInfo? _internalItemsQueryUserProperty = typeof(InternalItemsQuery).GetProperty(nameof(InternalItemsQuery.User), BindingFlags.Public | BindingFlags.Instance);
+    private static readonly MethodInfo? _baseItemIsVisible = typeof(BaseItem)
+        .GetMethods(BindingFlags.Public | BindingFlags.Instance)
+        .FirstOrDefault(m => m.Name == "IsVisible" && m.GetParameters().Length == 1);
+    private static readonly Type? _baseItemIsVisibleUserType = _baseItemIsVisible?.GetParameters()[0].ParameterType;
 
     public MoonfinController(
         MoonfinSettingsService settingsService,
@@ -673,14 +677,31 @@ public class MoonfinController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     public ActionResult GetGenres()
     {
+        var userId = this.GetUserIdFromClaims();
+        if (userId == null)
+        {
+            return Unauthorized(new { Error = "User not authenticated" });
+        }
+
+        var queryUser = ResolveQueryUser(userId.Value);
+        if (queryUser == null)
+        {
+            return Ok(new { Items = Array.Empty<object>() });
+        }
+
         var query = new InternalItemsQuery
         {
             IncludeItemTypes = [BaseItemKind.Genre],
             Recursive = true
         };
 
+        if (!TryApplyQueryUser(query, queryUser))
+        {
+            return Ok(new { Items = Array.Empty<object>() });
+        }
+
         var genres = _libraryManager.GetItemsResult(query).Items
-            .Where(g => !string.IsNullOrWhiteSpace(g.Name))
+            .Where(g => !string.IsNullOrWhiteSpace(g.Name) && IsItemVisibleToUser(g, queryUser))
             .Select(g => new { Id = g.Id.ToString("N"), Name = g.Name })
             .OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -1226,7 +1247,28 @@ public class MoonfinController : ControllerBase
             return null;
         }
 
-        return _libraryManager.GetItemsResult(query).Items.FirstOrDefault(i => i.Id == itemId);
+        var item = _libraryManager.GetItemsResult(query).Items.FirstOrDefault(i => i.Id == itemId);
+        return item != null && IsItemVisibleToUser(item, queryUser) ? item : null;
+    }
+
+    /// <summary>
+    /// Invokes BaseItem.IsVisible(User) via reflection so we stay compatible with the
+    /// User type change between Jellyfin 10.10 and 10.11. Fails closed: if the call
+    /// throws or cannot be invoked, the item is treated as not visible.
+    /// </summary>
+    private static bool IsItemVisibleToUser(BaseItem item, object queryUser)
+    {
+        if (_baseItemIsVisible == null || _baseItemIsVisibleUserType == null) return true;
+        if (!_baseItemIsVisibleUserType.IsInstanceOfType(queryUser)) return true;
+
+        try
+        {
+            return _baseItemIsVisible.Invoke(item, [queryUser]) is true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -1242,7 +1284,7 @@ public class MoonfinController : ControllerBase
     /// Returns null if no exclusions are needed (i.e. no genre filter should be applied).
     /// Uses GUIDs instead of names for locale-independent filtering.
     /// </summary>
-    private Guid[]? GetIncludedGenreIds(List<string>? excludedGenreIds)
+    private Guid[]? GetIncludedGenreIds(List<string>? excludedGenreIds, object queryUser)
     {
         if (excludedGenreIds is not { Count: > 0 }) return null;
 
@@ -1252,7 +1294,11 @@ public class MoonfinController : ControllerBase
             Recursive = true
         };
 
-        var allGenres = _libraryManager.GetItemsResult(genreQuery).Items;
+        if (!TryApplyQueryUser(genreQuery, queryUser)) return Array.Empty<Guid>();
+
+        var allGenres = _libraryManager.GetItemsResult(genreQuery).Items
+            .Where(g => IsItemVisibleToUser(g, queryUser))
+            .ToList();
 
         var excluded = new HashSet<Guid>();
         foreach (var idStr in excludedGenreIds)
@@ -1265,7 +1311,6 @@ public class MoonfinController : ControllerBase
             .Select(g => g.Id)
             .ToArray();
 
-        // If nothing was actually excluded, skip filtering
         return included.Length < allGenres.Count ? included : null;
     }
 
@@ -1295,14 +1340,12 @@ public class MoonfinController : ControllerBase
     /// </summary>
     private List<BaseItem> GetLibraryItems(List<string>? libraryIds, int limit, object queryUser, List<string>? excludedGenreIds = null)
     {
-        var includedGenreIds = GetIncludedGenreIds(excludedGenreIds);
+        var includedGenreIds = GetIncludedGenreIds(excludedGenreIds, queryUser);
 
-        // All genres excluded — no items can match
         if (includedGenreIds is { Length: 0 }) return [];
 
         if (libraryIds is not { Count: > 0 })
         {
-            // No specific libraries selected — query across all libraries
             var query = new InternalItemsQuery
             {
                 IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Series],
@@ -1315,20 +1358,31 @@ public class MoonfinController : ControllerBase
             if (!TryApplyQueryUser(query, queryUser)) return [];
 
             SetRandomOrder(query);
-            return _libraryManager.GetItemsResult(query).Items.ToList();
+            return _libraryManager.GetItemsResult(query).Items
+                .Where(item => IsItemVisibleToUser(item, queryUser))
+                .ToList();
         }
 
-        // Query each selected library via ParentId (matches user view IDs from getUserViews).
-        // TopParentIds won't work here — it filters on an internal DB column
-        // whose values differ from the user-facing view GUIDs.
-        var allItems = new List<BaseItem>();
-        var seenIds = new HashSet<Guid>();
-        var perLibraryLimit = Math.Max(1, limit / libraryIds.Count + 1);
-
+        // Only allow libraries the user can see; silently drop any the caller
+        // doesn't have access to so settings carried over from a previous state
+        // (or forged by a client) cannot leak restricted content.
+        var allowedLibraryIds = new List<Guid>();
         foreach (var libId in libraryIds)
         {
             if (!Guid.TryParse(libId, out var parentGuid)) continue;
+            var parent = _libraryManager.GetItemById(parentGuid);
+            if (parent == null || !IsItemVisibleToUser(parent, queryUser)) continue;
+            allowedLibraryIds.Add(parentGuid);
+        }
 
+        if (allowedLibraryIds.Count == 0) return [];
+
+        var allItems = new List<BaseItem>();
+        var seenIds = new HashSet<Guid>();
+        var perLibraryLimit = Math.Max(1, limit / allowedLibraryIds.Count + 1);
+
+        foreach (var parentGuid in allowedLibraryIds)
+        {
             var query = new InternalItemsQuery
             {
                 IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Series],
@@ -1345,14 +1399,12 @@ public class MoonfinController : ControllerBase
 
             foreach (var item in _libraryManager.GetItemsResult(query).Items)
             {
-                if (seenIds.Add(item.Id))
-                {
-                    allItems.Add(item);
-                }
+                if (!seenIds.Add(item.Id)) continue;
+                if (!IsItemVisibleToUser(item, queryUser)) continue;
+                allItems.Add(item);
             }
         }
 
-        // Shuffle merged results for fair representation across libraries
         for (var i = allItems.Count - 1; i > 0; i--)
         {
             var j = Random.Shared.Next(i + 1);
@@ -1426,6 +1478,7 @@ public class MoonfinController : ControllerBase
             foreach (var item in _libraryManager.GetItemsResult(query).Items)
             {
                 if (!seenIds.Add(item.Id)) continue;
+                if (!IsItemVisibleToUser(item, queryUser)) continue;
                 if (excludedNames != null && item.Genres.Any(g => excludedNames.Contains(g))) continue;
 
                 allItems.Add(item);
