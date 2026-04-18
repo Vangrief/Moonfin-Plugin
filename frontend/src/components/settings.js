@@ -421,7 +421,8 @@ var Settings = {
                     { value: 'off', label: 'Off' }
                 ], settings.mediaBarEnabled ? 'moonfin' : 'off') +
             '</div>' +
-            this.createToggleCard('detailsPageEnabled', 'Details Page', 'Use the custom Moonfin details page instead of the default Jellyfin one', settings.detailsPageEnabled);
+            this.createToggleCard('detailsPageEnabled', 'Details Page', 'Use the custom Moonfin details page instead of the default Jellyfin one', settings.detailsPageEnabled) +
+            this.createToggleCard('libraryPageEnabled', 'Library Page', 'Use the custom Moonfin library browser instead of the default Jellyfin library page', settings.libraryPageEnabled !== false);
 
         var mediaBarContent =
             this.createSelectCard('mediaBarSourceType', 'Content Source', 'Where to pull media bar items from', [

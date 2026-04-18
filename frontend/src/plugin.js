@@ -166,6 +166,34 @@ const Plugin = {
         return provider === 'moonfin';
     },
 
+    _collectionTypeFromRoute(route) {
+        var map = { movies: 'movies', tv: 'tvshows', music: 'music', homevideos: 'homevideos', musicvideos: 'musicvideos', books: 'books' };
+        return map[route] || '';
+    },
+
+    _resolveLibraryName(libraryId) {
+        var libs = (Navbar.initialized && Navbar.libraries) || (Sidebar.initialized && Sidebar.libraries) || [];
+        for (var i = 0; i < libs.length; i++) {
+            if (libs[i].Id === libraryId) return libs[i].Name || 'Library';
+        }
+        return 'Library';
+    },
+
+    _tryOpenLibraryFromHash() {
+        if (Storage.get('libraryPageEnabled') === false) return false;
+        var hash = window.location.hash || '';
+        var match = hash.match(/^#\/(movies|tv|music|homevideos|musicvideos|books|list)(?:[/?#]|$)/);
+        if (!match) return false;
+        var queryStr = hash.indexOf('?') !== -1 ? hash.slice(hash.indexOf('?') + 1) : '';
+        var params = new URLSearchParams(queryStr);
+        var libraryId = params.get('topParentId') || params.get('parentId');
+        if (!libraryId) return false;
+        if (Library.isVisible && Library.libraryId === libraryId) return true;
+        var collectionType = params.get('collectionType') || this._collectionTypeFromRoute(match[1]);
+        Library.show(libraryId, this._resolveLibraryName(libraryId), collectionType);
+        return true;
+    },
+
     shouldSuppressParadoxMediaBar(settings) {
         var provider = this.getDesktopMediaBarProvider(settings);
         return provider === 'off' || provider === 'moonfin';
@@ -1254,6 +1282,8 @@ const Plugin = {
         if (hadOverlay) {
             this._overlayHistoryDepth = 0;
         }
+
+        if (this._tryOpenLibraryFromHash()) return;
 
         if (this.isAdminPage()) {
             if (Navbar.container) Navbar.container.classList.add('hidden');

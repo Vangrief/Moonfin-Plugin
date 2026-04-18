@@ -37,6 +37,12 @@ body.moonfin-library-visible .moonfin-sidebar {
     display: none !important;
 }
 
+body.moonfin-library-visible #reactRoot,
+body.moonfin-library-visible .skinHeader,
+body.moonfin-library-visible .mainAnimatedPages {
+    visibility: hidden;
+}
+
 body.moonfin-library-visible.moonfin-navbar-active .moonfin-library-overlay {
     padding-top: 0 !important;
 }

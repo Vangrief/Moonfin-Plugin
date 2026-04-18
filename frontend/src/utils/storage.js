@@ -23,6 +23,7 @@ const Storage = {
     defaults: {
         navbarEnabled: false,
         detailsPageEnabled: false,
+        libraryPageEnabled: true,
         detailsBackdropOpacity: 90,
         detailsBackdropBlur: 0,
 
@@ -494,6 +495,7 @@ const Storage = {
             desktopMediaBarProvider: 'desktopMediaBarProvider',
             navbarEnabled: 'navbarEnabled',
             detailsPageEnabled: 'detailsPageEnabled',
+            libraryPageEnabled: 'libraryPageEnabled',
             detailsBackdropOpacity: 'detailsBackdropOpacity',
             detailsBackdropBlur: 'detailsBackdropBlur',
             mediaBarEnabled: 'mediaBarEnabled',
@@ -549,6 +551,7 @@ const Storage = {
             desktopMediaBarProvider: localProfile.desktopMediaBarProvider,
             navbarEnabled: localProfile.navbarEnabled,
             detailsPageEnabled: localProfile.detailsPageEnabled,
+            libraryPageEnabled: localProfile.libraryPageEnabled,
             detailsBackdropOpacity: localProfile.detailsBackdropOpacity,
             detailsBackdropBlur: localProfile.detailsBackdropBlur,
             mediaBarEnabled: localProfile.mediaBarEnabled,

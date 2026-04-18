@@ -57,6 +57,53 @@ var Library = {
 
     init: function() {
         this.createContainer();
+        this.setupHomeTileInterception();
+    },
+
+    _resolveLibraryName: function(card, libraryId) {
+        if (card) {
+            var nameEl = card.querySelector('.cardText-first, .cardText, .listItemBodyText');
+            if (nameEl) {
+                var name = nameEl.textContent.trim();
+                if (name) return name;
+            }
+        }
+        var libs = (Navbar.initialized && Navbar.libraries) ||
+                   (Sidebar.initialized && Sidebar.libraries) || [];
+        for (var i = 0; i < libs.length; i++) {
+            if (libs[i].Id === libraryId) return libs[i].Name || 'Library';
+        }
+        return 'Library';
+    },
+
+    setupHomeTileInterception: function() {
+        var ignoreSelectors = '.videoOsdBottom, .videoOsdTop, .osdHeader, .videoOsd, .subtitleAppearanceDialog, .subtitleSync, .trackSelections, .playerStats, .dialog, .dialogContainer, .focuscontainer-down, .actionSheetContent, .actionSheet, .actionSheetScroller, .videoPlayerContainer, .upNextContainer, .mediaSelectionMenu, .slideshowButtonContainer, .btnVideoOsd, .osdMediaInfo, .osdControls, .skipSegmentContainer, .itemContextMenu, .popupContainer, .toast, .guide, .recordingFields, .formDialogContent, .formDialog, .promptDialog, .confirmDialog, .withPopup, .multiSelectMenu, .moonfin-more-menu, .moonfin-settings-panel';
+
+        document.addEventListener('click', function(e) {
+            if (Storage.get('libraryPageEnabled') === false) return;
+            if (e.target.closest(ignoreSelectors)) return;
+
+            var card = e.target.closest('.card, .listItem, [data-action="link"]');
+            if (!card) return;
+
+            var cardType = card.getAttribute('data-type');
+            if (cardType !== 'CollectionFolder') return;
+
+            var dataAction = card.getAttribute('data-action');
+            if (dataAction && dataAction !== 'link') return;
+
+            var libraryId = card.getAttribute('data-id');
+            if (!libraryId) return;
+
+            var collectionType = (card.getAttribute('data-collectiontype') || '').toLowerCase();
+            if (collectionType === 'livetv') return;
+
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+
+            Library.show(libraryId, Library._resolveLibraryName(card, libraryId), collectionType);
+        }, true);
     },
 
     createContainer: function() {

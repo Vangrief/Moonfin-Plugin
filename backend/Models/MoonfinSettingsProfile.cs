@@ -45,6 +45,9 @@ public class MoonfinSettingsProfile
     [JsonPropertyName("detailsPageEnabled")]
     public bool? DetailsPageEnabled { get; set; }
 
+    [JsonPropertyName("libraryPageEnabled")]
+    public bool? LibraryPageEnabled { get; set; }
+
     [JsonPropertyName("detailsBackdropOpacity")]
     public int? DetailsBackdropOpacity { get; set; }
 

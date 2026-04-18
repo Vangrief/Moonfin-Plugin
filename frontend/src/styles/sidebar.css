@@ -364,6 +364,10 @@ body.moonfin-sidebar-active .cardOverlayContainer {
         -webkit-backdrop-filter: blur(8px);
     }
 
+    .moonfin-sidebar-mobile-trigger.hidden {
+        display: none !important;
+    }
+
     .moonfin-sidebar-mobile-trigger svg {
         width: 22px;
         height: 22px;
