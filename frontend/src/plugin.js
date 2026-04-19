@@ -154,7 +154,7 @@ const Plugin = {
         if (Device.getProfileName() !== 'desktop') return null;
         var desktopProfile = Storage.getProfile('desktop') || {};
         var provider = String(desktopProfile.desktopMediaBarProvider || '').toLowerCase();
-        if (provider === 'paradox' || provider === 'moonfin' || provider === 'off') {
+        if (provider === 'paradox' || provider === 'enhanced' || provider === 'moonfin' || provider === 'off') {
             return provider;
         }
         return settings.mediaBarEnabled ? 'moonfin' : 'off';
@@ -196,7 +196,7 @@ const Plugin = {
 
     shouldSuppressParadoxMediaBar(settings) {
         var provider = this.getDesktopMediaBarProvider(settings);
-        return provider === 'off' || provider === 'moonfin';
+        return provider === 'off' || provider === 'moonfin' || provider === 'enhanced';
     },
 
     applyParadoxMediaBarSuppression(settings) {

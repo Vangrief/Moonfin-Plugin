@@ -417,6 +417,7 @@ var Settings = {
             '<div class="moonfin-desktop-mediabar-mode-wrap" style="display:none">' +
                 this.createSelectCard('desktopMediaBarProvider', 'Desktop Media Bar', 'Choose which media bar to use on desktop', [
                     { value: 'paradox', label: 'Paradox Media Bar' },
+                    { value: 'enhanced', label: 'Media Bar Enhanced' },
                     { value: 'moonfin', label: 'Moonfin Media Bar' },
                     { value: 'off', label: 'Off' }
                 ], settings.mediaBarEnabled ? 'moonfin' : 'off') +
