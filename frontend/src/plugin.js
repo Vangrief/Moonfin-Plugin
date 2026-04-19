@@ -1,5 +1,5 @@
 const Plugin = {
-    version: '1.8.1',
+    version: '1.8.2',
     name: 'Moonfin Web Plugin',
     initialized: false,
     _initializing: false,
