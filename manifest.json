@@ -9,6 +9,15 @@
     "imageUrl": "https://raw.githubusercontent.com/Moonfin-Client/Plugin/master/backend/assets/logo.png",
     "versions": [
       {
+        "version": "1.8.2.0",
+        "changelog": "## Features\n\n- Added Media Bar Enhanced support in desktop media bar settings. (#98)\n- Clicking a row item now navigates to the correct library, and playback from the Continue Watching row works properly again. (#60)\n\n## Bug Fixes\n\n- Details page buttons were too large on some screens — they've been resized to something more reasonable. (#100)\n- Clicking items from third-party home screen section plugins no longer incorrectly triggers Moonfin's custom detail page. (#96)\n- Admin default settings now correctly propagate to existing users when changed. (#101)\n- The Jellyseerr discover page was crashing to an error screen because the proxy was wrapping responses in an unexpected JSON envelope. That's fixed now. (#108)\n- The global profile now saves reliably, the media bar state persists correctly across Moonfin and Paradox themes, and users no longer see genres or library sections they don't have access to. (#87)",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/Moonfin-Client/Plugin/releases/download/1.8.2/Moonfin.Server-1.8.2.0.zip",
+        "checksum": "C559FB46DFE70DD27F151FB928D2F604",
+        "timestamp": "2026-04-19T20:07:23",
+        "dependencies": []
+      },
+      {
         "version": "1.8.1.0",
         "changelog": "## Bug Fixes\n\n- Fixed Moonfin UI not loading on Jellyfin instances deployed under a reverse proxy sub-path\n- Fixed Moonfin login detection using private Jellyfin API internals that could return falsy values depending on Jellyfin version, causing the plugin to never initialize\n- Fixed Jellyseerr proxy (cookies, HTML/CSS rewrites, injected script) using hardcoded root-relative paths that broke under reverse proxy sub-path deployments\n- Fixed Letterboxd ratings showing doubled values for entries cached prior to v1.7.0",
         "targetAbi": "10.10.0.0",
