@@ -65,7 +65,6 @@ var Details = {
         var self = this;
 
         if (!Storage.get('detailsPageEnabled')) {
-            console.log('[Moonfin] Details: Custom details page disabled by setting');
             return;
         }
         
@@ -93,6 +92,7 @@ var Details = {
 
             var itemId = self.getItemIdFromCard(card);
             if (!itemId) return;
+            if (!self.isLikelyJellyfinItemId(itemId)) return;
 
             var cardType = card.getAttribute('data-type') || 
                           (card.querySelector('[data-type]') ? card.querySelector('[data-type]').getAttribute('data-type') : null) ||
@@ -131,6 +131,7 @@ var Details = {
             
             var itemId = self.getItemIdFromCard(card) || self.getItemIdFromLink(link);
             if (!itemId) return;
+            if (!self.isLikelyJellyfinItemId(itemId)) return;
             
             var cardType = card.getAttribute('data-type') || self.inferCardType(card);
             
@@ -158,6 +159,7 @@ var Details = {
                     var cardType = card.getAttribute('data-type') || self.inferCardType(card);
                     
                     if (itemId && (!cardType || ['Movie', 'Series', 'Episode', 'Season'].indexOf(cardType) !== -1)) {
+                        if (!self.isLikelyJellyfinItemId(itemId)) return;
                         e.preventDefault();
                         e.stopPropagation();
                         e.stopImmediatePropagation();
@@ -168,7 +170,7 @@ var Details = {
             }
         }, true);
 
-        // Close on back button — keyCodes 461 (LG) and 10009 (Samsung) are TV remote back buttons
+        // Close on back button - keyCodes 461 (LG) and 10009 (Samsung) are TV remote back buttons
         document.addEventListener('keydown', function(e) {
             if (self.isVisible && (e.key === 'Escape' || e.keyCode === 27 || e.keyCode === 461 || e.keyCode === 10009)) {
                 e.preventDefault();
@@ -189,19 +191,21 @@ var Details = {
         if (dataIdEl) return dataIdEl.getAttribute('data-id');
         
         var link = card.querySelector('a');
-        if (link && link.href) {
-            var match = link.href.match(/id=([a-f0-9]+)/i) || link.href.match(/\/([a-f0-9]{32})/i);
-            if (match) return match[1];
-        }
-        return null;
+        return this.getItemIdFromLink(link);
     },
 
     getItemIdFromLink: function(link) {
         if (!link || !link.href) return null;
-        var match = link.href.match(/id=([a-f0-9]+)/i) || 
-                   link.href.match(/\/details\?id=([a-f0-9]+)/i) ||
+        var match = link.href.match(/id=([a-f0-9]{32}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i) || 
+                   link.href.match(/\/details\?id=([a-f0-9]{32}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i) ||
                    link.href.match(/\/([a-f0-9]{32})/i);
         return match ? match[1] : null;
+    },
+
+    isLikelyJellyfinItemId: function(itemId) {
+        if (!itemId || typeof itemId !== 'string') return false;
+        return /^[a-f0-9]{32}$/i.test(itemId) ||
+               /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(itemId);
     },
 
     inferCardType: function(card) {
