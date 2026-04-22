@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using MediaBrowser.Model.Plugins;
 using Moonfin.Server.Models;
 
@@ -50,10 +51,43 @@ public class PluginConfiguration : BasePluginConfiguration
     public MoonfinSettingsProfile? DefaultUserSettings { get; set; }
 
     /// <summary>
+    /// Admin-hinterlegte Jellyseerr-Credentials pro Jellyfin-User.
+    /// Wenn für einen User ein aktivierter Eintrag existiert, loggt das Plugin den User
+    /// beim ersten Jellyseerr-Proxy-Request automatisch ein (ohne doppelte Anmeldung).
+    /// Passwörter werden im Klartext in der Plugin-Config gespeichert — nur durch
+    /// OS-Dateisystem-Rechte geschützt.
+    /// </summary>
+    public List<JellyseerrUserCredential> JellyseerrUserCredentials { get; set; } = new();
+
+    /// <summary>
     /// Gets the effective Seerr URL for server-to-server communication.
     /// </summary>
     public string? GetEffectiveJellyseerrUrl()
     {
         return JellyseerrUrl?.TrimEnd('/');
     }
+}
+
+/// <summary>
+/// Ein hinterlegtes Jellyseerr-Credential für einen bestimmten Jellyfin-User.
+/// </summary>
+public class JellyseerrUserCredential
+{
+    /// <summary>Die Jellyfin-User-ID.</summary>
+    public Guid JellyfinUserId { get; set; }
+
+    /// <summary>
+    /// Der Username für die Jellyseerr-Anmeldung.
+    /// Bei AuthType="jellyfin": Jellyfin-Username. Bei AuthType="local": Jellyseerr-Email.
+    /// </summary>
+    public string Username { get; set; } = string.Empty;
+
+    /// <summary>Das Passwort im Klartext.</summary>
+    public string Password { get; set; } = string.Empty;
+
+    /// <summary>Auth-Typ: "jellyfin" (default) oder "local".</summary>
+    public string AuthType { get; set; } = "jellyfin";
+
+    /// <summary>Nur aktivierte Credentials werden für Auto-Login verwendet.</summary>
+    public bool Enabled { get; set; } = true;
 }

@@ -17,8 +17,5 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<JellyseerrSessionService>();
         serviceCollection.AddSingleton<MdbListCacheService>();
         serviceCollection.AddHttpClient();
-
-        // Auto-register file transformations on plugin load (no manual task needed)
-        serviceCollection.AddHostedService<FileTransformationHostedService>();
     }
 }

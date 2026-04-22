@@ -288,6 +288,52 @@ public class JellyseerrSessionService
     }
 
     /// <summary>
+    /// Stellt sicher, dass eine Session für den User existiert. Falls keine vorhanden ist,
+    /// wird anhand der admin-hinterlegten Credentials automatisch ein Login versucht.
+    /// Gibt null zurück wenn weder Session noch Auto-Login-Credential verfügbar sind.
+    /// </summary>
+    public async Task<JellyseerrSession?> EnsureSessionAsync(Guid userId)
+    {
+        var session = await LoadSessionAsync(userId);
+        if (session != null && !string.IsNullOrEmpty(session.SessionCookie))
+        {
+            return session;
+        }
+
+        return await TryAutoLoginAsync(userId);
+    }
+
+    /// <summary>
+    /// Versucht einen Auto-Login für den gegebenen User anhand der admin-hinterlegten
+    /// Credentials. Gibt die neu erstellte Session zurück, oder null wenn kein passendes
+    /// aktives Credential existiert bzw. der Login fehlschlug.
+    /// </summary>
+    public async Task<JellyseerrSession?> TryAutoLoginAsync(Guid userId)
+    {
+        var config = MoonfinPlugin.Instance?.Configuration;
+        var cred = config?.JellyseerrUserCredentials?
+            .FirstOrDefault(c => c.JellyfinUserId == userId && c.Enabled);
+
+        if (cred == null || string.IsNullOrEmpty(cred.Username))
+        {
+            return null;
+        }
+
+        _logger.LogInformation("Seerr auto-login attempt for user {UserId} (authType={AuthType})",
+            userId, cred.AuthType);
+
+        var result = await AuthenticateAsync(userId, cred.Username, cred.Password, cred.AuthType);
+        if (result == null || !result.Success)
+        {
+            _logger.LogWarning("Seerr auto-login failed for user {UserId}: {Error}",
+                userId, result?.Error ?? "unknown");
+            return null;
+        }
+
+        return await LoadSessionAsync(userId);
+    }
+
+    /// <summary>
     /// Validates a stored session by calling Seerr's /auth/me endpoint.
     /// </summary>
     private async Task<bool> ValidateSessionAsync(JellyseerrSession session)
@@ -415,7 +461,7 @@ public class JellyseerrSessionService
             };
         }
 
-        var session = await LoadSessionAsync(userId);
+        var session = await EnsureSessionAsync(userId);
         if (session == null)
         {
             return new JellyseerrProxyResponse
@@ -428,70 +474,36 @@ public class JellyseerrSessionService
 
         try
         {
-            var cookieContainer = new CookieContainer();
-            cookieContainer.Add(new Uri(jellyseerrUrl), new Cookie("connect.sid", session.SessionCookie));
+            var (statusCode, responseBody, responseContentType, authExpired) =
+                await ExecuteApiRequestAsync(session, jellyseerrUrl, method, path, queryString, body, contentType);
 
-            using var handler = new HttpClientHandler
+            // Falls die Session abgelaufen ist, versuche einmalig einen Auto-Re-Login und wiederhole.
+            if (authExpired)
             {
-                CookieContainer = cookieContainer,
-                UseCookies = true
-            };
-            using var client = new HttpClient(handler);
-            client.Timeout = TimeSpan.FromSeconds(30);
-
-            // Build the target URL
-            var targetUrl = $"{jellyseerrUrl}/api/v1/{path.TrimStart('/')}";
-            if (!string.IsNullOrEmpty(queryString))
-            {
-                targetUrl += $"?{queryString.TrimStart('?')}";
-            }
-
-            var request = new HttpRequestMessage(method, targetUrl);
-
-            if (method != HttpMethod.Get && method != HttpMethod.Head)
-            {
-                var csrfToken = await FetchCsrfTokenAsync(client, jellyseerrUrl, cookieContainer);
-                if (!string.IsNullOrEmpty(csrfToken))
-                {
-                    request.Headers.Add("X-CSRF-Token", csrfToken);
-                }
-            }
-
-            if (body != null && body.Length > 0)
-            {
-                request.Content = new ByteArrayContent(body);
-                request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
-                    contentType ?? "application/json");
-            }
-
-            var response = await client.SendAsync(request);
-
-            var responseBody = await response.Content.ReadAsByteArrayAsync();
-            var responseContentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
-
-            // If auth expired, clear session
-            if (response.StatusCode == HttpStatusCode.Unauthorized ||
-                response.StatusCode == HttpStatusCode.Forbidden)
-            {
-                _logger.LogInformation("Seerr session expired for user {UserId}", userId);
+                _logger.LogInformation("Seerr session expired for user {UserId}, attempting auto re-login", userId);
                 await ClearSessionAsync(userId);
 
-                return new JellyseerrProxyResponse
+                var freshSession = await TryAutoLoginAsync(userId);
+                if (freshSession != null)
                 {
-                    StatusCode = 401,
-                    Body = JsonSerializer.SerializeToUtf8Bytes(new { error = "Seerr session expired", code = "SESSION_EXPIRED" }),
-                    ContentType = "application/json"
-                };
-            }
+                    (statusCode, responseBody, responseContentType, authExpired) =
+                        await ExecuteApiRequestAsync(freshSession, jellyseerrUrl, method, path, queryString, body, contentType);
+                }
 
-            if (response.IsSuccessStatusCode)
-            {
-                await CheckForRotatedCookieAsync(session, response, cookieContainer, jellyseerrUrl);
+                if (freshSession == null || authExpired)
+                {
+                    return new JellyseerrProxyResponse
+                    {
+                        StatusCode = 401,
+                        Body = JsonSerializer.SerializeToUtf8Bytes(new { error = "Seerr session expired", code = "SESSION_EXPIRED" }),
+                        ContentType = "application/json"
+                    };
+                }
             }
 
             return new JellyseerrProxyResponse
             {
-                StatusCode = (int)response.StatusCode,
+                StatusCode = statusCode,
                 Body = responseBody,
                 ContentType = responseContentType
             };
@@ -543,54 +555,31 @@ public class JellyseerrSessionService
             };
         }
 
-        var session = await LoadSessionAsync(userId);
+        // Versuche Auto-Login, bleibe aber tolerant — Web-Requests dürfen auch ohne Session laufen
+        // (z.B. initiale Login-Seiten-Assets die Jellyseerr selber public ausliefert).
+        var session = await EnsureSessionAsync(userId);
 
         try
         {
-            var cookieContainer = new CookieContainer();
-            if (session != null)
-            {
-                cookieContainer.Add(new Uri(jellyseerrUrl), new Cookie("connect.sid", session.SessionCookie));
-            }
+            var (statusCode, responseBody, responseContentType, authExpired) =
+                await ExecuteWebRequestAsync(session, jellyseerrUrl, method, path, queryString, body, contentType);
 
-            using var handler = new HttpClientHandler
+            if (authExpired && session != null)
             {
-                CookieContainer = cookieContainer,
-                UseCookies = true,
-                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli
-            };
-            using var client = new HttpClient(handler);
-            client.Timeout = TimeSpan.FromSeconds(30);
+                _logger.LogInformation("Seerr web session expired for user {UserId}, attempting auto re-login", userId);
+                await ClearSessionAsync(userId);
 
-            var targetUrl = $"{jellyseerrUrl}/{path?.TrimStart('/') ?? ""}";
-            if (!string.IsNullOrEmpty(queryString))
-            {
-                targetUrl += queryString.StartsWith('?') ? queryString : $"?{queryString}";
-            }
-
-            var request = new HttpRequestMessage(method, targetUrl);
-
-            if (body != null && body.Length > 0)
-            {
-                request.Content = new ByteArrayContent(body);
-                if (!string.IsNullOrEmpty(contentType))
+                var freshSession = await TryAutoLoginAsync(userId);
+                if (freshSession != null)
                 {
-                    request.Content.Headers.TryAddWithoutValidation("Content-Type", contentType);
+                    (statusCode, responseBody, responseContentType, authExpired) =
+                        await ExecuteWebRequestAsync(freshSession, jellyseerrUrl, method, path, queryString, body, contentType);
                 }
-            }
-
-            var response = await client.SendAsync(request);
-            var responseBody = await response.Content.ReadAsByteArrayAsync();
-            var responseContentType = response.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
-
-            if (session != null && response.IsSuccessStatusCode)
-            {
-                await CheckForRotatedCookieAsync(session, response, cookieContainer, jellyseerrUrl);
             }
 
             return new JellyseerrProxyResponse
             {
-                StatusCode = (int)response.StatusCode,
+                StatusCode = statusCode,
                 Body = responseBody,
                 ContentType = responseContentType
             };
@@ -615,6 +604,128 @@ public class JellyseerrSessionService
                 ContentType = "text/plain"
             };
         }
+    }
+
+    /// <summary>
+    /// Führt den eigentlichen API-Request gegen Jellyseerr aus. Gibt Status, Body, Content-Type
+    /// und ein Flag zurück ob die Session abgelaufen ist (401/403).
+    /// </summary>
+    private async Task<(int StatusCode, byte[] Body, string ContentType, bool AuthExpired)> ExecuteApiRequestAsync(
+        JellyseerrSession session,
+        string jellyseerrUrl,
+        HttpMethod method,
+        string path,
+        string? queryString,
+        byte[]? body,
+        string? contentType)
+    {
+        var cookieContainer = new CookieContainer();
+        cookieContainer.Add(new Uri(jellyseerrUrl), new Cookie("connect.sid", session.SessionCookie));
+
+        using var handler = new HttpClientHandler
+        {
+            CookieContainer = cookieContainer,
+            UseCookies = true
+        };
+        using var client = new HttpClient(handler);
+        client.Timeout = TimeSpan.FromSeconds(30);
+
+        var targetUrl = $"{jellyseerrUrl}/api/v1/{path.TrimStart('/')}";
+        if (!string.IsNullOrEmpty(queryString))
+        {
+            targetUrl += $"?{queryString.TrimStart('?')}";
+        }
+
+        var request = new HttpRequestMessage(method, targetUrl);
+
+        if (method != HttpMethod.Get && method != HttpMethod.Head)
+        {
+            var csrfToken = await FetchCsrfTokenAsync(client, jellyseerrUrl, cookieContainer);
+            if (!string.IsNullOrEmpty(csrfToken))
+            {
+                request.Headers.Add("X-CSRF-Token", csrfToken);
+            }
+        }
+
+        if (body != null && body.Length > 0)
+        {
+            request.Content = new ByteArrayContent(body);
+            request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
+                contentType ?? "application/json");
+        }
+
+        var response = await client.SendAsync(request);
+        var responseBody = await response.Content.ReadAsByteArrayAsync();
+        var responseContentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
+
+        var authExpired = response.StatusCode == HttpStatusCode.Unauthorized
+            || response.StatusCode == HttpStatusCode.Forbidden;
+
+        if (response.IsSuccessStatusCode)
+        {
+            await CheckForRotatedCookieAsync(session, response, cookieContainer, jellyseerrUrl);
+        }
+
+        return ((int)response.StatusCode, responseBody, responseContentType, authExpired);
+    }
+
+    /// <summary>
+    /// Führt den eigentlichen Web-Request gegen Jellyseerr aus (rohe Pfade ohne /api/v1/-Präfix).
+    /// </summary>
+    private async Task<(int StatusCode, byte[] Body, string ContentType, bool AuthExpired)> ExecuteWebRequestAsync(
+        JellyseerrSession? session,
+        string jellyseerrUrl,
+        HttpMethod method,
+        string path,
+        string? queryString,
+        byte[]? body,
+        string? contentType)
+    {
+        var cookieContainer = new CookieContainer();
+        if (session != null)
+        {
+            cookieContainer.Add(new Uri(jellyseerrUrl), new Cookie("connect.sid", session.SessionCookie));
+        }
+
+        using var handler = new HttpClientHandler
+        {
+            CookieContainer = cookieContainer,
+            UseCookies = true,
+            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli
+        };
+        using var client = new HttpClient(handler);
+        client.Timeout = TimeSpan.FromSeconds(30);
+
+        var targetUrl = $"{jellyseerrUrl}/{path?.TrimStart('/') ?? ""}";
+        if (!string.IsNullOrEmpty(queryString))
+        {
+            targetUrl += queryString.StartsWith('?') ? queryString : $"?{queryString}";
+        }
+
+        var request = new HttpRequestMessage(method, targetUrl);
+
+        if (body != null && body.Length > 0)
+        {
+            request.Content = new ByteArrayContent(body);
+            if (!string.IsNullOrEmpty(contentType))
+            {
+                request.Content.Headers.TryAddWithoutValidation("Content-Type", contentType);
+            }
+        }
+
+        var response = await client.SendAsync(request);
+        var responseBody = await response.Content.ReadAsByteArrayAsync();
+        var responseContentType = response.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
+
+        var authExpired = response.StatusCode == HttpStatusCode.Unauthorized
+            || response.StatusCode == HttpStatusCode.Forbidden;
+
+        if (session != null && response.IsSuccessStatusCode)
+        {
+            await CheckForRotatedCookieAsync(session, response, cookieContainer, jellyseerrUrl);
+        }
+
+        return ((int)response.StatusCode, responseBody, responseContentType, authExpired);
     }
 
     private async Task SaveSessionAsync(JellyseerrSession session)

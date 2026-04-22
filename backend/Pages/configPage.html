@@ -56,12 +56,23 @@
                             </div>
                         </div>
                         <div style="background-color: rgba(0, 164, 220, 0.1); border-left: 4px solid #00a4dc; border-radius: 4px; padding: 1em 1.5em; margin: 1em 0;">
-                            <strong>SSO Proxy:</strong> When Seerr is enabled, Moonfin provides single sign-on.
-                            Users authenticate once with their Jellyfin credentials, and the session is stored server-side.
-                            All Moonfin clients (web, Android, Roku, webOS, Tizen, etc) access Seerr through
-                            <code>/Moonfin/Jellyseerr/Web/</code> (iframe) and <code>/Moonfin/Jellyseerr/Api/</code> (API)
-                            without re-authenticating.
+                            <strong>SSO Proxy:</strong> Moonfin proxies Seerr through Jellyfin. Sessions werden server-seitig
+                            pro User gespeichert. Alle Clients greifen über <code>/Moonfin/Jellyseerr/Web/</code> (iframe) und
+                            <code>/Moonfin/Jellyseerr/Api/</code> (API) zu — ohne Re-Authentifizierung.
                         </div>
+
+                        <h4 style="margin: 1.5em 0 0.5em; font-size: 0.95em; color: #00a4dc;">Auto-Login Credentials</h4>
+                        <div class="fieldDescription" style="margin-bottom: 0.8em;">
+                            Hinterlege pro Jellyfin-User ein Jellyseerr-Passwort, damit User automatisch eingeloggt werden
+                            ohne manuellen Login-Dialog. Das Plugin legt beim ersten Proxy-Request eine Session an und
+                            hält sie für alle Clients (Web, Android, Roku, …).
+                        </div>
+                        <div style="background-color: rgba(220, 120, 0, 0.12); border-left: 4px solid #dc7800; border-radius: 4px; padding: 0.9em 1.2em; margin-bottom: 1em; font-size: 0.9em;">
+                            <strong>Sicherheitshinweis:</strong> Passwörter werden im Klartext in der Plugin-Config gespeichert
+                            (XML-Datei im Jellyfin-Config-Ordner). Schutz nur über OS-Dateisystem-Rechte.
+                            Nutze dies nur, wenn dein Jellyfin-Server physisch/filesystem-seitig abgesichert ist.
+                        </div>
+                        <div id="JellyseerrCredentialsList" style="border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:4px;"></div>
                     </div>
 
                     <div class="verticalSection">
@@ -224,28 +235,6 @@
                         </div>
                     </div>
 
-                    <div class="verticalSection">
-                        <h3 class="sectionTitle">Web Plugin Status</h3>
-                        <div class="fieldDescription" style="margin-bottom: 1em;">
-                            <p>Moonfin uses the
-                                <a href="https://github.com/IAmParadox27/jellyfin-plugin-file-transformation" target="_blank">File Transformation</a>
-                                plugin to inject its web UI.
-                            </p>
-                            <p style="margin-top: 0.5em;">
-                                <strong>Setup:</strong>
-                            </p>
-                            <ol style="margin-left: 1.5em;">
-                                <li>Install the <strong>File Transformation</strong> plugin (add <code>https://www.iamparadox.dev/jellyfin/plugins/manifest.json</code> to your plugin repositories)</li>
-                                <li>Restart Jellyfin</li>
-                                <li>Force refresh your browser (Ctrl+Shift+R)</li>
-                            </ol>
-                            <p style="margin-top: 0.5em;">
-                                <strong>UI not loading?</strong> Go to <em>Dashboard &gt; Scheduled Tasks</em> and run the
-                                <strong>Moonfin Startup</strong> task once, then refresh your browser.
-                            </p>
-                        </div>
-                    </div>
-
                     <div>
                         <button is="emby-button" type="submit" class="raised button-submit block">
                             <span>Save</span>
@@ -311,8 +300,132 @@
                     togglePickerVisibility();
                     loadAdminGenrePicker(defaults.mediaBarExcludedGenres || []);
 
+                    loadCredentialsUi();
+
                     Dashboard.hideLoadingMsg();
                 });
+
+                function moonfinFetch(path, opts) {
+                    opts = opts || {};
+                    var serverUrl = ApiClient.serverAddress ? ApiClient.serverAddress() : '';
+                    var token = ApiClient.accessToken ? ApiClient.accessToken() : '';
+                    opts.headers = opts.headers || {};
+                    if (token) opts.headers['Authorization'] = 'MediaBrowser Token="' + token + '"';
+                    if (opts.body && !opts.headers['Content-Type']) opts.headers['Content-Type'] = 'application/json';
+                    return fetch(serverUrl + path, opts);
+                }
+
+                function loadCredentialsUi() {
+                    var container = document.querySelector('#JellyseerrCredentialsList');
+                    if (!container) return;
+                    container.innerHTML = '<div style="padding:8px;color:rgba(255,255,255,0.5);font-size:0.9em;">Loading users...</div>';
+
+                    Promise.all([
+                        ApiClient.getUsers(),
+                        moonfinFetch('/Moonfin/Jellyseerr/Credentials').then(function(r) {
+                            return r.ok ? r.json() : { items: [] };
+                        }).catch(function() { return { items: [] }; })
+                    ]).then(function(results) {
+                        var users = results[0] || [];
+                        var creds = (results[1] && results[1].items) || [];
+                        var credMap = {};
+                        for (var i = 0; i < creds.length; i++) {
+                            credMap[String(creds[i].jellyfinUserId).toLowerCase()] = creds[i];
+                        }
+
+                        if (!users.length) {
+                            container.innerHTML = '<div style="padding:8px;color:rgba(255,255,255,0.5);font-size:0.9em;">No users found.</div>';
+                            return;
+                        }
+
+                        var html = '';
+                        for (var u = 0; u < users.length; u++) {
+                            var user = users[u];
+                            var uid = String(user.Id).toLowerCase();
+                            var cred = credMap[uid] || null;
+                            var username = cred ? cred.username : (user.Name || '');
+                            var authType = cred ? cred.authType : 'jellyfin';
+                            var enabled = cred ? cred.enabled : false;
+                            var hasPw = cred ? cred.hasPassword : false;
+
+                            html += '<div class="moonfin-cred-row" data-userid="' + esc(user.Id) + '" style="display:grid;grid-template-columns:minmax(140px,1fr) minmax(140px,1fr) minmax(140px,1fr) 140px auto auto;gap:8px;align-items:center;padding:8px;border-bottom:1px solid rgba(255,255,255,0.06);">' +
+                                '<div style="min-width:0;"><div style="font-size:0.9em;color:rgba(255,255,255,0.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(user.Name || 'Unknown') + '</div>' +
+                                '<div style="font-size:0.72em;color:rgba(255,255,255,0.4);">' + (hasPw ? 'Password gespeichert' : 'Kein Passwort') + '</div></div>' +
+                                '<input type="text" class="cred-username" value="' + esc(username) + '" placeholder="Username / Email" style="width:100%;padding:4px 6px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:3px;font-size:0.85em;">' +
+                                '<input type="password" class="cred-password" value="" placeholder="' + (hasPw ? '(unverändert)' : 'Passwort') + '" style="width:100%;padding:4px 6px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:3px;font-size:0.85em;">' +
+                                '<select class="cred-authtype" style="width:100%;padding:4px 6px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:3px;font-size:0.85em;">' +
+                                    '<option value="jellyfin"' + (authType === 'jellyfin' ? ' selected' : '') + '>Jellyfin</option>' +
+                                    '<option value="local"' + (authType === 'local' ? ' selected' : '') + '>Local</option>' +
+                                '</select>' +
+                                '<label style="display:flex;align-items:center;gap:4px;font-size:0.82em;color:rgba(255,255,255,0.7);cursor:pointer;">' +
+                                    '<input type="checkbox" class="cred-enabled"' + (enabled ? ' checked' : '') + ' style="accent-color:#00a4dc;"> Enabled</label>' +
+                                '<div style="display:flex;gap:4px;">' +
+                                    '<button type="button" class="raised cred-save" style="font-size:0.8em;padding:4px 10px;min-width:0;">Save</button>' +
+                                    (hasPw ? '<button type="button" class="raised cred-delete" style="font-size:0.8em;padding:4px 10px;min-width:0;background:rgba(220,60,60,0.25);">Remove</button>' : '') +
+                                '</div>' +
+                            '</div>';
+                        }
+                        container.innerHTML = html;
+
+                        var rows = container.querySelectorAll('.moonfin-cred-row');
+                        for (var r = 0; r < rows.length; r++) {
+                            attachRowHandlers(rows[r]);
+                        }
+                    }).catch(function(err) {
+                        container.innerHTML = '<div style="padding:8px;color:rgba(255,120,120,0.8);font-size:0.9em;">Failed to load: ' + esc(err.message || err) + '</div>';
+                    });
+                }
+
+                function attachRowHandlers(row) {
+                    var userId = row.dataset.userid;
+                    var saveBtn = row.querySelector('.cred-save');
+                    var delBtn = row.querySelector('.cred-delete');
+
+                    if (saveBtn) {
+                        saveBtn.addEventListener('click', function() {
+                            var payload = {
+                                username: row.querySelector('.cred-username').value.trim(),
+                                password: row.querySelector('.cred-password').value,
+                                authType: row.querySelector('.cred-authtype').value,
+                                enabled: row.querySelector('.cred-enabled').checked
+                            };
+                            if (!payload.username) {
+                                Dashboard.alert({ message: 'Username darf nicht leer sein.' });
+                                return;
+                            }
+                            saveBtn.disabled = true;
+                            moonfinFetch('/Moonfin/Jellyseerr/Credentials/' + encodeURIComponent(userId), {
+                                method: 'PUT',
+                                body: JSON.stringify(payload)
+                            }).then(function(r) {
+                                saveBtn.disabled = false;
+                                if (!r.ok) throw new Error('HTTP ' + r.status);
+                                Dashboard.alert({ message: 'Credential gespeichert.' });
+                                loadCredentialsUi();
+                            }).catch(function(err) {
+                                saveBtn.disabled = false;
+                                Dashboard.alert({ message: 'Speichern fehlgeschlagen: ' + (err.message || err) });
+                            });
+                        });
+                    }
+
+                    if (delBtn) {
+                        delBtn.addEventListener('click', function() {
+                            if (!confirm('Credential wirklich entfernen?')) return;
+                            delBtn.disabled = true;
+                            moonfinFetch('/Moonfin/Jellyseerr/Credentials/' + encodeURIComponent(userId), {
+                                method: 'DELETE'
+                            }).then(function(r) {
+                                delBtn.disabled = false;
+                                if (!r.ok) throw new Error('HTTP ' + r.status);
+                                loadCredentialsUi();
+                            }).catch(function(err) {
+                                delBtn.disabled = false;
+                                Dashboard.alert({ message: 'Löschen fehlgeschlagen: ' + (err.message || err) });
+                            });
+                        });
+                    }
+                }
 
                 function loadAdminCollectionPicker(selectedIds) {
                     var picker = document.querySelector('#DefaultCollectionPicker');

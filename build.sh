@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build script for Moonfin Jellyfin plugin
+# Build script for Moonfin Jellyfin server plugin (backend-only fork)
 # Creates a release ZIP with proper structure for plugin manifest
 # Works on Linux, macOS, and Windows (Git Bash/WSL)
 
@@ -12,31 +12,9 @@ BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 # Get repo root (where this script lives)
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
-FRONTEND_DIR="$ROOT_DIR/frontend"
-WEB_DIST_DIR="$FRONTEND_DIR/dist"
 
 echo "Building Moonfin v${VERSION} for Jellyfin ${TARGET_ABI}..."
 echo "Build Time: ${BUILD_TIMESTAMP}"
-
-# Build the web plugin first
-if [ -f "$FRONTEND_DIR/build.js" ]; then
-    echo ""
-    echo "--- Building web plugin ---"
-    (cd "$FRONTEND_DIR" && node build.js)
-else
-    echo "Warning: frontend/build.js not found, skipping web build"
-fi
-
-# Sync web plugin output into backend embedded resources
-if [ -d "$WEB_DIST_DIR" ]; then
-    echo ""
-    echo "--- Syncing web files ---"
-    cp "$WEB_DIST_DIR/plugin.js" "$BACKEND_DIR/Web/plugin.js"
-    cp "$WEB_DIST_DIR/plugin.css" "$BACKEND_DIR/Web/plugin.css"
-    echo "Web files synced to backend/Web/"
-else
-    echo "Warning: frontend/dist/ not found, skipping web file sync"
-fi
 
 # Build the .NET plugin
 echo ""
@@ -58,10 +36,10 @@ cat > "$RELEASE_DIR/meta.json" <<EOF
 {
   "category": "General",
   "changelog": "",
-  "description": "Moonfin brings a modern TV-style UI to Jellyfin web. Features include: custom navbar, media bar with featured content, Jellyseerr integration, and cross-device settings synchronization.",
+  "description": "Moonfin server plugin (backend-only): Jellyseerr SSO proxy with admin-configured per-user credentials, settings sync, MDBList and TMDB ratings. No web UI injection.",
   "guid": "${PLUGIN_GUID}",
   "name": "Moonfin",
-  "overview": "Custom UI and settings sync for Jellyfin",
+  "overview": "Server-side APIs for Jellyseerr SSO, settings sync, and ratings",
   "owner": "RadicalMuffinMan",
   "targetAbi": "${TARGET_ABI}.0",
   "timestamp": "${TIMESTAMP_ISO}",
@@ -94,7 +72,6 @@ fi
 # Update manifest.json
 MANIFEST_FILE="$ROOT_DIR/manifest.json"
 if [ -f "$MANIFEST_FILE" ]; then
-    # Create timestamp in ISO 8601 format
     TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%S")
 
     if command -v jq &> /dev/null; then

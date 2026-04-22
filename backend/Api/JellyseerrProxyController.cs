@@ -116,12 +116,18 @@ public class JellyseerrProxyController : ControllerBase
             });
         }
 
-        var session = await _sessionService.GetSessionAsync(userId.Value, validate: false);
+        // EnsureSessionAsync triggert ggf. Auto-Login per admin-hinterlegtem Credential,
+        // damit die UI direkt einen "authenticated" Zustand sieht ohne manuellen Login.
+        var session = await _sessionService.EnsureSessionAsync(userId.Value);
+
+        var hasCredential = config?.JellyseerrUserCredentials?
+            .Any(c => c.JellyfinUserId == userId.Value && c.Enabled) ?? false;
 
         return Ok(new
         {
             enabled = true,
             authenticated = session != null,
+            autoLoginConfigured = hasCredential,
             url = jellyseerrUrl,
             jellyseerrUserId = session?.JellyseerrUserId,
             displayName = session?.DisplayName,
@@ -130,6 +136,124 @@ public class JellyseerrProxyController : ControllerBase
             sessionCreated = session?.CreatedAt,
             lastValidated = session?.LastValidated
         });
+    }
+
+    /// <summary>
+    /// Admin-only: Liste aller konfigurierten Auto-Login-Credentials.
+    /// Passwörter werden nie zurückgegeben, nur ein Flag ob eins hinterlegt ist.
+    /// </summary>
+    [HttpGet("Credentials")]
+    [Authorize(Policy = "RequiresElevation")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult ListCredentials()
+    {
+        var config = MoonfinPlugin.Instance?.Configuration;
+        var creds = config?.JellyseerrUserCredentials ?? new List<JellyseerrUserCredential>();
+
+        var sanitized = creds.Select(c => new
+        {
+            jellyfinUserId = c.JellyfinUserId,
+            username = c.Username,
+            authType = c.AuthType,
+            enabled = c.Enabled,
+            hasPassword = !string.IsNullOrEmpty(c.Password)
+        });
+
+        return Ok(new { items = sanitized });
+    }
+
+    /// <summary>
+    /// Admin-only: Credential für einen Jellyfin-User anlegen oder aktualisieren.
+    /// Wenn im Body das Passwort leer gelassen wird und bereits eins gespeichert ist,
+    /// bleibt das bestehende Passwort erhalten (ermöglicht "Enabled"-Toggle ohne Re-Entry).
+    /// </summary>
+    [HttpPut("Credentials/{userId}")]
+    [Authorize(Policy = "RequiresElevation")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UpsertCredential(Guid userId, [FromBody] JellyseerrUserCredential body)
+    {
+        if (body == null || string.IsNullOrWhiteSpace(body.Username))
+        {
+            return BadRequest(new { error = "Username is required" });
+        }
+
+        var plugin = MoonfinPlugin.Instance;
+        if (plugin == null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "Plugin not initialized" });
+        }
+
+        var config = plugin.Configuration;
+        config.JellyseerrUserCredentials ??= new List<JellyseerrUserCredential>();
+
+        var existing = config.JellyseerrUserCredentials.FirstOrDefault(c => c.JellyfinUserId == userId);
+        var authType = string.IsNullOrWhiteSpace(body.AuthType) ? "jellyfin" : body.AuthType.ToLowerInvariant();
+        var password = string.IsNullOrEmpty(body.Password) ? (existing?.Password ?? string.Empty) : body.Password;
+
+        if (existing != null)
+        {
+            existing.Username = body.Username;
+            existing.Password = password;
+            existing.AuthType = authType;
+            existing.Enabled = body.Enabled;
+        }
+        else
+        {
+            config.JellyseerrUserCredentials.Add(new JellyseerrUserCredential
+            {
+                JellyfinUserId = userId,
+                Username = body.Username,
+                Password = password,
+                AuthType = authType,
+                Enabled = body.Enabled
+            });
+        }
+
+        plugin.UpdateConfiguration(config);
+
+        // Alte Session löschen, damit der nächste Request frisch via Auto-Login einloggt.
+        await _sessionService.ClearSessionAsync(userId);
+
+        return Ok(new
+        {
+            success = true,
+            jellyfinUserId = userId,
+            username = body.Username,
+            authType = authType,
+            enabled = body.Enabled,
+            hasPassword = !string.IsNullOrEmpty(password)
+        });
+    }
+
+    /// <summary>
+    /// Admin-only: Credential für einen User entfernen und dessen Session löschen.
+    /// </summary>
+    [HttpDelete("Credentials/{userId}")]
+    [Authorize(Policy = "RequiresElevation")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> DeleteCredential(Guid userId)
+    {
+        var plugin = MoonfinPlugin.Instance;
+        if (plugin == null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "Plugin not initialized" });
+        }
+
+        var config = plugin.Configuration;
+        var creds = config.JellyseerrUserCredentials;
+        if (creds != null)
+        {
+            var removed = creds.RemoveAll(c => c.JellyfinUserId == userId);
+            if (removed > 0)
+            {
+                plugin.UpdateConfiguration(config);
+            }
+        }
+
+        await _sessionService.ClearSessionAsync(userId);
+
+        return Ok(new { success = true });
     }
 
     /// <summary>
